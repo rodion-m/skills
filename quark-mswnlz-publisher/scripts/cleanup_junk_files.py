@@ -106,11 +106,15 @@ async def cleanup_quark_batch_folder(mgr: QuarkPanFileManager, batch_folder_fid:
 
         # 列出子文件夹内文件
         files = await get_quark_folder_children(mgr, sub_fid)
+        # 匹配垃圾文件（非目录）和垃圾子文件夹（目录）
         target_files = [f for f in files if not f.get("dir") and match_junk(f.get("file_name", ""), junk_files)]
+        target_subdirs = [f for f in files if f.get("dir") and match_junk(f.get("file_name", ""), junk_files)]
 
-        if target_files:
-            fids_to_delete = [f["fid"] for f in target_files]
-            names_deleted = [f.get("file_name", "?") for f in target_files]
+        all_targets = target_files + target_subdirs
+
+        if all_targets:
+            fids_to_delete = [f["fid"] for f in all_targets]
+            names_deleted = [f.get("file_name", "?") for f in all_targets]
             await mgr.delete_files(fids_to_delete, pdir_fid=sub_fid)
             summary["total_deleted"] += len(fids_to_delete)
             summary["folders_with_junk"].append(sub_name)
@@ -138,18 +142,31 @@ def cleanup_baidu_batch_folder(client: BaiduPCSClient, batch_path: str, junk_fil
     entries = client.ls(batch_path)
     # BaiduPCS-Go: size='-' 表示目录，否则是文件
     dirs = [e for e in entries if e.get("size", "").strip() == "-"]
-    files = [e for e in entries if e.get("size", "").strip() not in ("", "-")]
+    files = [e for e in entries if e.get("size", "").strip() not in ("", "-")] 
 
-    print(f"  📁 共 {len(dirs)} 个子文件夹, {len(files)} 个文件")
+    # 批次根目录下匹配垃圾名单的子文件夹（直接删整个文件夹）
+    junk_dirs_at_root = [d for d in dirs if match_junk(d.get("name", ""), junk_files)]
+    for jd in junk_dirs_at_root:
+        full_path = f"{batch_path}/{jd['name']}"
+        if client.rm(full_path):
+            summary["total_deleted"] += 1
+            summary["folders_with_junk"].append(jd["name"])
+            summary["details"].append({"folder": "(根)", "deleted": [jd["name"]], "count": 1})
+            print(f"    🗑️ [根] 删文件夹: {jd['name']}")
+
+    # 剩余正常子文件夹
+    normal_dirs = [d for d in dirs if not match_junk(d.get("name", ""), junk_files)]
+
+    print(f"  📁 共 {len(normal_dirs)} 个子文件夹, {len(files)} 个文件")
 
     # 扫描各个子文件夹内的文件
-    for sd in dirs:
+    for sd in normal_dirs:
         sub_name = sd.get("name", "?")
         sub_path = f"{batch_path}/{sub_name}"
 
         sub_entries = client.ls(sub_path)
         # 子文件夹内可能还有子文件夹（如2026年07月/0701/），只需扫描文件
-        sub_files = [f for f in sub_entries if f.get("size", "").strip() not in ("", "-")]
+        sub_files = [f for f in sub_entries if f.get("size", "").strip() not in ("", "-")] 
 
         deleted_names = []
         for f in sub_files:

@@ -132,7 +132,11 @@ async def main():
         before = {item['fid'] for item in await list_all_items(mgr, to_dir_id)}
 
         # 2. Save the source URL to batch folder
-        await mgr.run(url, folder_id=to_dir_id, download=False)
+        try:
+            await mgr.run(url, folder_id=to_dir_id, download=False)
+        except (EOFError, Exception) as e:
+            print(f"  ❌ 转存失败，跳过: {e}")
+            continue
 
         # 3. Post-save snapshot: find newly created files/folders
         after = await list_all_items(mgr, to_dir_id)

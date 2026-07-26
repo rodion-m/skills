@@ -64,15 +64,28 @@ function loadBotToken() {
 }
 
 /**
+ * Escape HTML special characters so Telegram's HTML parser doesn't choke.
+ */
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
  * Send a message to Telegram via Bot API.
  * Returns true on success, false on failure.
  */
 async function sendTelegram(botToken, text) {
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+  const safeText = escapeHtml(text);
   const body = JSON.stringify({
     chat_id: TG_CHAT_ID,
     message_thread_id: TG_TOPIC_ID,
-    text: text,
+    text: safeText,
     parse_mode: 'HTML',
     disable_web_page_preview: true,
   });
@@ -543,21 +556,70 @@ Commands:
       return;
     }
 
-    // Merge all new videos into a single message (compact, no link previews)
+    // Split into chunks of ~3500 chars to stay under Telegram limit (4096)
+    const MSG_LIMIT = 3500;
     const videoLines = newVideos.map((nv, i) => {
       const chName = nv.channel.title || nv.video.channelTitle || nv.channel.channelId;
       return `${i + 1}. ${nv.video.title}\n   📺 ${chName}｜🔗 ${nv.video.link || videoUrl(nv.video.videoId)}`;
     });
-    const combinedText = `🔔 ${newVideos.length} 个新视频\n\n${videoLines.join('\n\n')}`;
 
-    const ok = await sendTelegram(botToken, combinedText);
+    // Build chunks
+    const chunks = [];
+    let currentLines = [];
+    let currentLen = 0;
+    for (const line of videoLines) {
+      const lineLen = line.length + 2; // +2 for \n\n
+      // Header for first chunk: "🔔 N 个新视频\n\n"
+      const header = chunks.length === 0 ? `🔔 ${newVideos.length} 个新视频 (1/${Math.ceil(videoLines.length / 30)})` : undefined;
+      const headerLen = header ? header.length + 2 : 0;
+      if (currentLen + lineLen + headerLen > MSG_LIMIT && currentLines.length > 0) {
+        chunks.push(currentLines);
+        currentLines = [line];
+        currentLen = lineLen;
+      } else {
+        currentLines.push(line);
+        currentLen += lineLen;
+      }
+    }
+    if (currentLines.length > 0) chunks.push(currentLines);
 
-    if (ok) {
-      const sentIds = newVideos.map(v => v.video.videoId);
+    console.error(`准备发送 ${chunks.length} 条分块消息 (共 ${newVideos.length} 个视频)...`);
+
+    let allOk = true;
+    const sentIds = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      const isFirst = i === 0;
+      const header = isFirst
+        ? `🔔 ${newVideos.length} 个新视频 (${i + 1}/${chunks.length})\n\n`
+        : `📌 续 (${i + 1}/${chunks.length})\n\n`;
+      const chunkText = header + chunks[i].join('\n\n');
+      const ok = await sendTelegram(botToken, chunkText);
+      if (ok) {
+        // Track which videoIds are in this chunk
+        // Extract videoIds from the chunk (they're in order)
+        const chunkStart = chunks.slice(0, i).flat().length;
+        const chunkEnd = chunkStart + chunks[i].length;
+        const chunkIds = newVideos.slice(chunkStart, chunkEnd).map(v => v.video.videoId);
+        sentIds.push(...chunkIds);
+        console.error(`✅ 分块 ${i + 1}/${chunks.length} 发送成功 (${chunks[i].length} 条)`);
+      } else {
+        console.error(`❌ 分块 ${i + 1}/${chunks.length} 发送失败，后续停止`);
+        allOk = false;
+        break;
+      }
+    }
+
+    if (allOk && sentIds.length > 0) {
       markAsSeen(sentIds);
-      console.error(`✅ 已发送合并消息 (${newVideos.length} 个视频)`);
+      console.error(`✅ 全部发送完成 (${sentIds.length} 个视频已标记 seen)`);
+    } else if (sentIds.length > 0) {
+      // Partial success — only mark the ones that were sent
+      markAsSeen(sentIds);
+      console.error(`⚠️ 部分成功: ${sentIds.length} 个已标记 seen，${newVideos.length - sentIds.length} 个下次重试`);
+      process.exit(1);
     } else {
-      console.error(`❌ 合并消息发送失败 — ${newVideos.length} 个视频下次重试`);
+      console.error(`❌ 全部发送失败 — ${newVideos.length} 个视频下次重试`);
       process.exit(1);
     }
 
