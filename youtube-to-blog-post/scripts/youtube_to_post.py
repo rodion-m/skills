@@ -597,6 +597,12 @@ def generate_seo_description(title, description):
         desc = re.sub(r'https?://\S+', '', description)
         desc = re.sub(r'\S+@\S+', '', desc)
 
+        # Remove hashtag tokens (v4.6.1): YouTube descriptions end with hashtag
+        # lists like "#Mac微信多开 #微信双开Mac ...". These pollute SEO
+        # description generation because they score high in keyword matching
+        # but are meaningless as a meta description sentence.
+        desc = re.sub(r'#[^\s]+', '', desc)
+
         # Remove excessive whitespace
         desc = re.sub(r'\s+', ' ', desc).strip()
 
