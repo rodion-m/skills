@@ -515,13 +515,17 @@ items.json
 | aliyun_client.py | 1.0.0 | 阿里云盘 SDK 封装 |
 | aliyun_batch_run.py | 1.0.0 | 阿里云转存+分享 |
 | copy_promo_to_folders.py | 2.1.1 | 推广文件复制（动态 fid） |
-| cleanup_junk_files.py | 1.0.0 | 垃圾文件清理 |
-| mswnlz_publish.py | 1.1.0 | GitHub 发布 + TG 通知 + SEO 资源格式 |
+| cleanup_junk_files.py | 1.1.0 | 垃圾文件清理（支持文件夹删除） |
+| mswnlz_publish.py | 1.1.1 | GitHub 发布 + TG 通知（路径修复） |
 | url_router.py | 1.1.0 | 网盘链接路由 |
 
 ---
 
 ## 📜 更新日志
+
+### v2.2.1 (2026-07-26)
+- 🐛 **修复 mswnlz_publish.py 路径错误**：v2.2.0-rc1 误将默认路径改为 `/Users/m/document/QNSZ/project/mswnlz-github`（少 `.` 且目录不存在），修正回 `/Users/m./Documents/QNSZ/project/mswnlz`
+- MSWNLZ_ROOT 优先级调整：`mswnlz` > `mswnlz-github`（与实际目录结构一致）
 
 ### v2.2.0 (2026-07-24)
 - 同步站点 SEO 重构后的发布合同：只写资源源文件，站点分类页由 catalog 生成

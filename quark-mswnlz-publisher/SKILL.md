@@ -13,7 +13,9 @@ description: "Automate the full QuarkPanTool → mswnlz GitHub content publishin
 
 ## 更新日志
 
-### v2.2.0 (2026-07-26)
+### v2.2.1 (2026-07-26)
+- 🐛 **修复 mswnlz_publish.py 路径错误**：v2.2.0-rc1 误将默认路径改为 `/Users/m/document/QNSZ/project/mswnlz-github`（少 `.` 且目录不存在），修正回 `/Users/m./Documents/QNSZ/project/mswnlz`
+- MSWNLZ_ROOT 优先级调整：`mswnlz` > `mswnlz-github`（与实际目录结构一致）
 - 🧹 **垃圾清理支持删除文件夹**：`cleanup_junk_files.py` 升级，匹配到垃圾名单的子文件夹也会整个删除（此前只删文件）
   - 夸克端：子文件夹匹配名单 → 整个文件夹删除
   - 百度端：批次根目录下的垃圾子文件夹直接 `rm`，子文件夹内正常扫描
@@ -23,11 +25,11 @@ description: "Automate the full QuarkPanTool → mswnlz GitHub content publishin
   - `00❤️必看~网盘用户福利❤️`（文件夹）
 - 🔁 **转存失败自动跳过**：`quark_batch_run.py` 捕获 EOFError 后跳过当前条目继续下一条，不再整个批次中断
 
-### v2.2.0-rc1 (2026-07-24)
+### v2.2.0 (2026-07-24)
 - 同步 `doc.869hr.uk` SEO 重构后的站点合同：发布端只追加资源源文件，不再生成或修改分类页结构
 - 新增资源写入标准 Markdown 链接格式 `[标题](URL)`，兼容站点构建期 catalog 和服务端可索引目录
 - 站点重建前执行 `npm run build` + `npm run validate`，验证 catalog、sitemap 和 `/public/` 重复页规则
-- 默认路径更新为 `/Users/m/document/QNSZ/project/mswnlz-github`，可用环境变量覆盖
+- ⚠️ 当时误改默认路径为 `/Users/m/document/QNSZ/project/mswnlz-github`（少 `.` 且目录不存在）→ v2.2.0 已修复
 
 ### v2.1.1 (2026-07-19)
 - 🔧 **copy_promo 动态发现推广文件夹**：不再硬编码账号1的 fid，改为先试硬编码 → 失败则在 `temp/` 下按名称查找，自动适配多账号场景
