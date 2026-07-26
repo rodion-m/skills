@@ -1,8 +1,9 @@
 ---
 name: youtube-to-blog-post
 description: Convert YouTube videos to SEO-optimized blog posts. Extract video title, description, and content, then generate a search-engine-friendly blog post with embedded video, cover images, optimized metadata, structured Markdown sections, clean resource blocks, and canonical 5-8 keywords. Auto-generates English filenames and saves to the configured Hexo blog posts directory. Includes tag management rules to maintain a clean, consistent tag taxonomy.
-version: 4.6.1
+version: 4.6.2
 changelog:
+  - 2026-07-26: v4.6.2 明确保留 body_md fenced code block，并增加回归测试，确保 Hexo 主题可为生成代码块附加复制按钮
   - 2026-07-26: v4.6.1 修复 generate_seo_description 把 hashtag 列表当作 SEO description 的 bug——在提取候选句前先移除 # 开头的 hashtag token
   - 2026-07-23: v4.6.0 清除新旧 YouTube 描述和 body_md 中无效的"复制到浏览器"提示，避免重新写回博客正文
   - 2026-07-22: v4.5.0 输出 VideoObject 所需 front matter、自然摘要 excerpt、最多 5 个标签，移除伪相关推荐首页链接，并与博客 SEO 门禁对齐
@@ -48,6 +49,7 @@ changelog:
 ### 📝 内容生成
 - 自动获取 YouTube 视频标题、描述和内容
 - **智能提取真实内容** - 从视频描述提取亮点、步骤、代码示例和资源链接
+- **代码块原样保留** - `body_md` 中 fenced code block 不转义、不扁平化，由 Hexo 主题统一提供复制按钮
 - 生成符合 Hexo 博客格式的文章
 - 自动生成 SEO 友好的英文文件名（kebab-case）
 - 在文章开头嵌入 YouTube 视频播放器（首屏可见）
@@ -657,6 +659,6 @@ keywords = ["VPS", "免费服务器", "虚拟服务器", "0成本", "VPS教程"]
 
 ---
 
-**版本**: 4.6.0 Video SEO and Blog Content Contract
-**更新日期**: 2026-07-23
+**版本**: 4.6.2 Video SEO, Blog Content and Code Copy Contract
+**更新日期**: 2026-07-26
 **状态**: ✅ 已测试并上线

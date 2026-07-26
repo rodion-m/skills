@@ -1,3 +1,14 @@
+# v4.6.2 - 2026-07-26
+
+- 明确 `body_md` 中 fenced code block 必须原样保留，交由 Hexo `highlight.js` 渲染。
+- 新增生成器回归测试，确认代码语言、换行和命令文本经过内容生成及 humanizer 后仍不变。
+- 与博客站点 `audit:code-copy` 及短裤博客流水线 v2.37.0 对齐。
+
+# v4.6.1 - 2026-07-26
+
+- 修复 SEO description 可能误用 YouTube 描述末尾 hashtag 列表的问题。
+- 在摘要候选句提取前移除 hashtag token，继续保留自然语言摘要长度门禁。
+
 # v4.6.0 - 2026-07-23
 
 - 统一清除 YouTube description 与 `body_md` 中无效的“链接需复制到浏览器中才能打开”提示及其格式变体。

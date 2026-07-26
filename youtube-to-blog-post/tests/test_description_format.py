@@ -53,6 +53,35 @@ class DescriptionFormatTests(unittest.TestCase):
         self.assertIn("适用场景", content)
         self.assertIn("这是完整描述。", content)
 
+    def test_body_md_preserves_fenced_code_for_hexo_copy_button(self):
+        body_md = """## 安装命令
+
+```bash
+npm install example-package
+echo "安装完成"
+```
+"""
+        content = blog.generate_post_content(
+            {
+                "id": "abc123XYZ",
+                "title": "命令行工具安装教程",
+                "description": "介绍命令行工具的安装、配置、验证方法与常见问题。",
+                "uploader": "频道",
+                "upload_date": "2026-07-26T12:00:00+08:00",
+                "duration": 120,
+                "thumbnail": "",
+            },
+            {"author": "M.", "local_thumbnail": "/images/test.jpg"},
+            "技术",
+            ["教程"],
+            body_md=body_md,
+        )
+        humanized = blog.humanize_article(content, "命令行工具安装教程")
+        self.assertIn(
+            '```bash\nnpm install example-package\necho "安装完成"\n```',
+            humanized,
+        )
+
     def test_redundant_browser_copy_notice_is_removed_from_all_inputs(self):
         description = (
             "适用场景\n"
