@@ -192,14 +192,16 @@ _LINK_LINE_RE = re.compile(r'^\[(.+?)\]\((https?://\S+?)\)\s*$')
 
 
 def normalize_legacy_lines(text: str) -> tuple[str, int]:
-    """把旧格式行统一转成 [标题](URL)，并确保相邻链接行之间有空行。
+    """把旧格式行统一转成 [标题](URL)，清除标题水印，并确保相邻链接行之间有空行。
 
-    旧格式1:  - 标题-超过100T资料总站网站-doc.869hr.uk | URL
-    旧格式2:  标题-超过100T资料总站网站-doc.869hr.uk | URL
+    处理变体:
+      A: -? 标题-超过100T资料总站网站-doc.869hr.uk | URL
+      C: [标题-超过100T资料总站网站xxx](URL)  → 清除水印后缀
     """
     converted = 0
     intermediate = []
     for line in text.splitlines():
+        # 变体A: 旧管道格式
         m = re.match(
             r'^-?\s*(.+?)-超过100T资料总站网站-doc\.869hr\.uk\s*\|\s*(https?://\S+)',
             line,
@@ -209,8 +211,24 @@ def normalize_legacy_lines(text: str) -> tuple[str, int]:
             safe = title.replace("[", "【").replace("]", "】")
             intermediate.append(f"[{safe}]({url})")
             converted += 1
-        else:
-            intermediate.append(line)
+            continue
+
+        # 变体C: 标准链接行但标题里嵌着水印 → 清水印
+        m = _LINK_LINE_RE.match(line)
+        if m and '超过100T资料总站网站' in m.group(1):
+            title = re.sub(
+                r'\s*-?超过100T资料总站网站-?doc\.869hr\.uk\s*',
+                '',
+                m.group(1),
+            ).strip()
+            title = re.sub(r'\s*-*\s*$', '', title).strip()  # 去残留尾 -
+            url = m.group(2)
+            safe = title.replace("[", "【").replace("]", "】")
+            intermediate.append(f"[{safe}]({url})")
+            converted += 1
+            continue
+
+        intermediate.append(line)
 
     # 第二遍：在相邻的 [标题](URL) 行之间插入空行
     # VitePress 会把相邻文本行合并为一个段落，导致渲染成一坨
@@ -233,7 +251,7 @@ def append_items(month_file: Path, items: List[Tuple[str, str]]):
     month_file.parent.mkdir(parents=True, exist_ok=True)
     existing = month_file.read_text(encoding="utf-8") if month_file.exists() else ""
 
-    # 自动修复旧格式 + 补空行
+    # 自动修复旧格式 + 清水印 + 补空行
     if '超过100T资料总站网站' in existing or _needs_blank_separation(existing):
         existing, n = normalize_legacy_lines(existing)
         if n:
