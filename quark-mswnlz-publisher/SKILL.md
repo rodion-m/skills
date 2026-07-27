@@ -5,13 +5,27 @@ description: "Automate the full QuarkPanTool → mswnlz GitHub content publishin
 
 # quark-mswnlz-publisher
 
-**版本**: v2.2.0
+**版本**: v2.4.0
 
 夸克网盘 / 百度网盘 / 阿里云盘 → mswnlz GitHub 资源仓库 → 站点自动更新，一条龙发布。
 
 支持三网盘混合输入、多账号轮换、多群组通知。
 
 ## 更新日志
+
+### v2.4.0 (2026-07-27)
+- 🎨 **彻底修复站点渲染换行问题**：`mswnlz_publish.py` 的 `append_items()` 和新增 `normalize_legacy_lines()` 三重保障：
+  - ① 自动把旧格式行（`标题-超过100T资料总站网站-doc.869hr.uk | URL`）转换为标准 `[标题](URL)`
+  - ② 自动检测相邻链接行缺空行的情况并插入空行（VitePress 会把相邻文本行合并为一个段落）
+  - ③ 新增条目追加时自动确保前文有空行隔开
+- 📐 **Markdown 规范固化**：每个资源条目独立一行 `[标题](URL)`，条目之间空行隔开
+- 🧪 **新增单元测试**：验证旧格式转换、缺空行修复、已规范不动等场景
+
+### v2.3.0 (2026-07-27)
+- 🔑 **cleanup 多账号自动遍历**：`cleanup_junk_files.py` v2.0 自动扫描 `config/cookies*.txt` 全部 cookie 文件，每个账号独立登录清理，不再遗漏非当前账号的垃圾文件
+- 🔁 **cleanup 递归扫描**：从只扫一级子文件夹升级为递归 6 层深度（`--max-depth` 可调），彻底清理嵌套在深层子文件夹中的垃圾
+- 📁 **junk_files.json 新增**：`更多资源收藏不迷路`（转存来源常见的推广文件夹）
+- 📝 **经验沉淀**：新增「踩坑记录」章节，记录多账号场景下的典型问题
 
 ### v2.2.1 (2026-07-26)
 - 🐛 **修复 mswnlz_publish.py 路径错误**：v2.2.0-rc1 误将默认路径改为 `/Users/m/document/QNSZ/project/mswnlz-github`（少 `.` 且目录不存在），修正回 `/Users/m./Documents/QNSZ/project/mswnlz`
@@ -520,3 +534,35 @@ pip install -r requirements.txt
 **百度盘**：上传到 `/推广文件/` 目录，文件清单同夸克。
 
 ## 脚本说明
+
+## ⚠️ 多账号踩坑记录
+
+多账号轮换机制下，每个夸克账号是**完全独立的网盘空间**。以下是实际踩过的坑：
+
+### 坑1：cleanup 只清理当前账号（v2.3.0 已修复）
+
+**现象**：转存时轮换到账号2，但 cleanup 只用 `QuarkPanFileManager()` 默认构造（读 `cookies.txt`），账号2里的垃圾文件永远不会被清理。
+
+**根因**：`cleanup_junk_files.py` 没有遍历多个 cookie 文件。
+
+**修复**：v2.3.0 开始自动扫描 `config/cookies*.txt` 全部 cookie 文件，每个账号独立登录+递归清理。
+
+### 坑2：cleanup 不递归（v2.3.0 已修复）
+
+**现象**：转存的资源文件夹里嵌套了子文件夹（如 `资源文件夹/更多资源收藏不迷路/`），cleanup 只扫了第一级，深层垃圾没删到。
+
+**修复**：v2.3.0 默认递归 6 层（`--max-depth` 可调）。
+
+### 坑3：同一批资源被转存两遍
+
+**现象**：因为两个 cookie 各自创建了批次文件夹（时间戳不同），同一批 items.json 被两个账号各转存了一份。
+
+**说明**：这本身是多账号轮换的设计预期（分摊转存压力），但如果同一批 items 被完整跑了两遍，说明 pipeline_orchestrator 被重复调用了。**务必确保同一批 items.json 只跑一次 pipeline**。如果确实重复了，已发出的链接不删除（避免链接失效），后续注意不要重复执行。
+
+### 多账号最佳实践
+
+1. **同一批 items.json 只跑一次** `pipeline_orchestrator.py`
+2. 运行完检查 `batch_share_results.json` 中的 `quark_account` 字段，确认使用的是哪个账号
+3. cleanup 会自动遍历所有账号，无需手动指定
+4. 如需手动清理某个账号：直接修改 `config/cookies.txt` 为目标账号的 cookie，然后运行 cleanup
+5. 新增 cookie 文件时（如 `cookies_3.txt`），cleanup 会自动发现并遍历

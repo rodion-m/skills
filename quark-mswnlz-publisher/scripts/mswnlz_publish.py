@@ -187,9 +187,58 @@ def readme_insert_month(readme: str, month: str) -> str:
     return header + readme
 
 
+# 标准资源行格式：[标题](URL)
+_LINK_LINE_RE = re.compile(r'^\[(.+?)\]\((https?://\S+?)\)\s*$')
+
+
+def normalize_legacy_lines(text: str) -> tuple[str, int]:
+    """把旧格式行统一转成 [标题](URL)，并确保相邻链接行之间有空行。
+
+    旧格式1:  - 标题-超过100T资料总站网站-doc.869hr.uk | URL
+    旧格式2:  标题-超过100T资料总站网站-doc.869hr.uk | URL
+    """
+    converted = 0
+    intermediate = []
+    for line in text.splitlines():
+        m = re.match(
+            r'^-?\s*(.+?)-超过100T资料总站网站-doc\.869hr\.uk\s*\|\s*(https?://\S+)',
+            line,
+        )
+        if m:
+            title, url = m.group(1).strip(), m.group(2).strip()
+            safe = title.replace("[", "【").replace("]", "】")
+            intermediate.append(f"[{safe}]({url})")
+            converted += 1
+        else:
+            intermediate.append(line)
+
+    # 第二遍：在相邻的 [标题](URL) 行之间插入空行
+    # VitePress 会把相邻文本行合并为一个段落，导致渲染成一坨
+    final_lines = []
+    prev_was_link = False
+    blanks_added = 0
+    for line in intermediate:
+        is_link = bool(_LINK_LINE_RE.match(line))
+        if is_link and prev_was_link:
+            final_lines.append("")  # 插入空行
+            blanks_added += 1
+        final_lines.append(line)
+        prev_was_link = is_link
+
+    result = "\n".join(final_lines) + ("\n" if text.endswith("\n") else "")
+    return result, converted + blanks_added
+
+
 def append_items(month_file: Path, items: List[Tuple[str, str]]):
     month_file.parent.mkdir(parents=True, exist_ok=True)
     existing = month_file.read_text(encoding="utf-8") if month_file.exists() else ""
+
+    # 自动修复旧格式 + 补空行
+    if '超过100T资料总站网站' in existing or _needs_blank_separation(existing):
+        existing, n = normalize_legacy_lines(existing)
+        if n:
+            print(f"[FIX] {month_file.name}: 自动规范化 {n} 行")
+
     out = existing.rstrip("\n") + ("\n" if existing.strip() else "")
     existing_urls = set(re.findall(r"https?://[^\s<>)|]+", existing))
     for title, url in items:
@@ -197,9 +246,24 @@ def append_items(month_file: Path, items: List[Tuple[str, str]]):
             print(f"[SKIP] existing URL in {month_file.name}: {title}")
             continue
         safe_title = title.replace("[", "【").replace("]", "】").strip()
+        # 新增条目前确保和上文有空行隔开
+        if out and not out.endswith("\n\n"):
+            out += "\n"
         out += f"[{safe_title}]({url})\n"
         existing_urls.add(url)
     month_file.write_text(out, encoding="utf-8")
+
+
+def _needs_blank_separation(text: str) -> bool:
+    """检测是否存在相邻的 [标题](URL) 行之间缺空行的情况。"""
+    lines = text.splitlines()
+    prev_was_link = False
+    for line in lines:
+        is_link = bool(_LINK_LINE_RE.match(line))
+        if is_link and prev_was_link:
+            return True
+        prev_was_link = is_link
+    return False
 
 
 def make_commit_message(items: List[str]) -> str:
@@ -323,11 +387,15 @@ def main():
     by_repo_github: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
     
     for idx, it in enumerate(share_results):
-        name = it.get("name") or ""
+        # 兼容两种格式: quark_batch_run (name/quark_name/share_url) 和 pipeline_orchestrator (name/links)
+        name = it.get("name") or it.get("quark_name") or it.get("title") or ""
         links = it.get("links", {})
         share_url = it.get("share_url") or ""
         if not name:
             continue
+        # 如果没有 links 字段但有 share_url，构造单链接 links
+        if not links and share_url:
+            links = {"quark": share_url}
         
         # 获取原始标题
         orig_title = ""

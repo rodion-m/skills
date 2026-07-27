@@ -54,6 +54,51 @@ from utils import read_config
 from share_folder_items import get_share_id_with_retry
 
 
+# ── 批次指纹锁（防止同一批 items 短时间内重复执行）──
+BATCH_LOCK_DIR = Path(__file__).resolve().parent.parent / ".batch_locks"
+BATCH_LOCK_TTL_SEC = 3600  # 1小时内视为重复
+
+
+def _items_fingerprint(items_json_path: str) -> str:
+    """计算 items.json 内容指纹（URL 排序后 md5）"""
+    import hashlib
+    items = json.loads(Path(items_json_path).read_text(encoding="utf-8"))
+    urls = []
+    for it in items:
+        u = (it.get("url") or it.get("input_url") or "").strip()
+        if u:
+            urls.append(u)
+        for multi in it.get("urls", []):
+            urls.append(multi.strip())
+    urls.sort()
+    return hashlib.md5("\n".join(urls).encode()).hexdigest()[:16]
+
+
+def check_batch_lock(items_json_path: str) -> bool:
+    """检查同一批 items 是否在 TTL 内已执行过。返回 True=应跳过。"""
+    fp = _items_fingerprint(items_json_path)
+    BATCH_LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    lock_file = BATCH_LOCK_DIR / f"{fp}.lock"
+    if lock_file.exists():
+        import time
+        age = time.time() - lock_file.stat().st_mtime
+        if age < BATCH_LOCK_TTL_SEC:
+            prev = lock_file.read_text(encoding="utf-8").strip()
+            print(f"\n[LOCK] ⚠️ 检测到同一批资源在 {int(age)} 秒前已执行过：{prev}")
+            print(f"[LOCK] 跳过本次执行，避免重复转存。")
+            print(f"[LOCK] 如需强制执行，删除 {lock_file} 后重试。")
+            return True
+    return False
+
+
+def write_batch_lock(items_json_path: str, batch_name: str):
+    """写入批次锁"""
+    fp = _items_fingerprint(items_json_path)
+    BATCH_LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    lock_file = BATCH_LOCK_DIR / f"{fp}.lock"
+    lock_file.write_text(f"{batch_name} @ {datetime.now().isoformat()}", encoding="utf-8")
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--label", default="短裤哥批次")
@@ -89,6 +134,11 @@ async def list_all_items(mgr, pdir_fid):
 
 async def main():
     args = parse_args()
+
+    # ── 批次指纹锁 ──
+    if check_batch_lock(args.items_json):
+        print("\n[LOCK] 如需强制重新执行，请删除锁文件或等待 1 小时。")
+        return
 
     # ── 账号轮换（方案B + 做法甲）──
     account_id = None
@@ -177,6 +227,8 @@ async def main():
         "items": [{"title": t, "input_url": u} for t, u in norm_items],
         "share_results": share_results,
     }
+
+    write_batch_lock(args.items_json, batch_folder_name)
 
     Path(args.out_json).write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n[DONE] wrote {args.out_json}")
