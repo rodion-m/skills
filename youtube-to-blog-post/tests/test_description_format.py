@@ -13,6 +13,20 @@ SPEC.loader.exec_module(blog)
 
 
 class DescriptionFormatTests(unittest.TestCase):
+    def test_video_upload_date_normalizes_yt_dlp_compact_date(self):
+        self.assertEqual(
+            blog.normalize_video_upload_date("20250726"),
+            "2025-07-26T00:00:00Z",
+        )
+
+    def test_video_upload_date_rejects_missing_timezone(self):
+        with self.assertRaisesRegex(ValueError, "timezone"):
+            blog.normalize_video_upload_date("2025-07-26T12:30:00")
+
+    def test_video_upload_date_rejects_invalid_time(self):
+        with self.assertRaisesRegex(ValueError, "invalid"):
+            blog.normalize_video_upload_date("2025-02-24T23:302:51Z")
+
     def test_seo_description_meets_shared_length_contract(self):
         description = blog.generate_seo_description("测试工具教程", "这是一句很短的介绍。")
         self.assertGreaterEqual(len(description), 45)

@@ -1,3 +1,9 @@
+# v4.6.3 - 2026-07-27
+
+- 强制 `video_upload_date` 为有效且带时区的 ISO 8601 日期时间。
+- 直接抓取 YouTube 时优先使用 yt-dlp `timestamp`；仅有 `YYYYMMDD` 时规范为 UTC 当日零点。
+- 拒绝无时区或非法的预填时间，避免 Search Console VideoObject `uploadDate` 问题进入博客。
+
 # v4.6.2 - 2026-07-26
 
 - 明确 `body_md` 中 fenced code block 必须原样保留，交由 Hexo `highlight.js` 渲染。

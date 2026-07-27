@@ -9,7 +9,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 import shutil
@@ -29,6 +29,10 @@ MAX_FILENAME_LENGTH = 50  # Short, readable URLs perform better
 
 REDUNDANT_BROWSER_NOTICE_RE = re.compile(
     r"(?:部分)?链接需(?:要)?复制到浏览器中才能打开",
+    re.IGNORECASE,
+)
+ZONED_ISO8601_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$",
     re.IGNORECASE,
 )
 
@@ -128,6 +132,25 @@ def yaml_safe_string(value: str) -> str:
         return '""'
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
+
+
+def normalize_video_upload_date(value) -> str:
+    """Return a valid ISO 8601 date-time with an explicit timezone."""
+    raw = str(value or "").strip()
+    if re.fullmatch(r"\d{8}", raw):
+        parsed = datetime.strptime(raw, "%Y%m%d").replace(tzinfo=timezone.utc)
+        return parsed.isoformat(timespec="seconds").replace("+00:00", "Z")
+    if not re.search(r"(?:Z|[+-]\d{2}:\d{2})$", raw, re.IGNORECASE):
+        raise ValueError("video upload date must be ISO 8601 with timezone")
+    if not ZONED_ISO8601_RE.fullmatch(raw):
+        raise ValueError("video upload date is invalid")
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00").replace("z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("video upload date is invalid") from error
+    if parsed.utcoffset() is None:
+        raise ValueError("video upload date must include timezone")
+    return raw
 
 
 def remove_redundant_browser_notice_lines(text: str) -> str:
@@ -248,12 +271,19 @@ def get_video_info(url):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(url, download=False)
+            timestamp = info.get('timestamp')
+            if timestamp:
+                upload_date = datetime.fromtimestamp(timestamp, timezone.utc).isoformat(
+                    timespec='seconds'
+                ).replace('+00:00', 'Z')
+            else:
+                upload_date = normalize_video_upload_date(info.get('upload_date', ''))
             return {
                 'id': info.get('id', ''),
                 'title': sanitize_text_for_yaml(info.get('title', 'Untitled')),
                 'description': info.get('description', ''),
                 'uploader': info.get('uploader', ''),
-                'upload_date': info.get('upload_date', ''),
+                'upload_date': upload_date,
                 'duration': info.get('duration', 0),
                 'thumbnail': info.get('thumbnail', ''),
                 'tags': info.get('tags', []),
@@ -719,6 +749,9 @@ def generate_post_content(video_info, config, category, tags, body_md=""):
 
     # Use current time as post date (not video upload time)
     date_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    upload_date = normalize_video_upload_date(
+        video_info.get('upload_date') or datetime.now().astimezone().isoformat(timespec='seconds')
+    )
 
     # Generate tags list - normalize to standard tags
     raw_tags = tags if isinstance(tags, list) else [t.strip() for t in tags.split(',')]
@@ -764,7 +797,7 @@ cover: {cover_image}
 thumbnail: {cover_image}
 video_id: {video_id}
 video_duration: {int(video_info.get('duration') or 0)}
-video_upload_date: {yaml_safe_string(video_info.get('upload_date') or date_str)}
+video_upload_date: {yaml_safe_string(upload_date)}
 toc: true
 comments: true
 copyright: true
