@@ -1,8 +1,9 @@
 ---
 name: youtube-to-blog-post
 description: Convert YouTube videos to SEO-optimized blog posts. Extract video title, description, and content, then generate a search-engine-friendly blog post with embedded video, cover images, optimized metadata, structured Markdown sections, clean resource blocks, and canonical 5-8 keywords. Auto-generates English filenames and saves to the configured Hexo blog posts directory. Includes tag management rules to maintain a clean, consistent tag taxonomy.
-version: 4.6.3
+version: 4.7.0
 changelog:
+  - 2026-07-27: v4.7.0 对齐博客 v2.2.0 独立观看页契约；生成的 video_id 等元数据会在 Hexo 构建时自动产生 /videos/<video_id>/、视频索引和 video-sitemap.xml
   - 2026-07-27: v4.6.3 强制 video_upload_date 为带时区的有效 ISO 8601，优先使用 YouTube timestamp，并拒绝无时区或非法预填值
   - 2026-07-26: v4.6.2 明确保留 body_md fenced code block，并增加回归测试，确保 Hexo 主题可为生成代码块附加复制按钮
   - 2026-07-26: v4.6.1 修复 generate_seo_description 把 hashtag 列表当作 SEO description 的 bug——在提取候选句前先移除 # 开头的 hashtag token
@@ -660,6 +661,6 @@ keywords = ["VPS", "免费服务器", "虚拟服务器", "0成本", "VPS教程"]
 
 ---
 
-**版本**: 4.6.3 Video SEO, Zoned Upload Date and Code Copy Contract
+**版本**: 4.7.0 Dedicated Video Watch Page Contract
 **更新日期**: 2026-07-27
 **状态**: ✅ 已测试并上线

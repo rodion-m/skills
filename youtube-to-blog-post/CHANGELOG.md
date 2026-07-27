@@ -1,3 +1,10 @@
+# v4.7.0 - 2026-07-27
+
+- 对齐博客站点 v2.2.0：生成文章现有的 `video_id`、`video_duration`、`video_upload_date` 和 `cover` 会在 Hexo 构建时自动生成 `/videos/<video_id>/` 独立观看页。
+- 同一个 YouTube ID 只生成一个稳定观看 URL，并自动进入 `/videos/` 视频索引与 `video-sitemap.xml`。
+- 原文章继续保留 YouTube 嵌入与 Twitter/X 大图规则，并由主题自动增加独立观看页入口。
+- 发布流水线必须在部署前通过目标观看页和全站视频发布审计。
+
 # v4.6.3 - 2026-07-27
 
 - 强制 `video_upload_date` 为有效且带时区的 ISO 8601 日期时间。
