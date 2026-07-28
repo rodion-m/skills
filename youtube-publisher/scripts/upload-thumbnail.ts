@@ -67,6 +67,13 @@ function parseOptions(args: string[]): CliOptions {
   if (thumbnailStat.size === 0) {
     throw new Error(`Thumbnail file is empty: ${thumbnail}`);
   }
+  const YT_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+  if (thumbnailStat.size > YT_THUMBNAIL_MAX_BYTES) {
+    throw new Error(
+      `Thumbnail file too large: ${(thumbnailStat.size / 1024 / 1024).toFixed(1)} MB. ` +
+      `YouTube limit is 2 MB. Convert to JPEG or reduce resolution.`
+    );
+  }
 
   const attempts = Number(attemptsInput);
   if (!Number.isInteger(attempts) || attempts < 1 || attempts > 10) {

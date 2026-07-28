@@ -328,18 +328,27 @@ async function uploadVideo(
   // Upload thumbnail if provided
   let thumbnailUploaded = false;
   if (options.thumbnail && fs.existsSync(options.thumbnail)) {
-    console.log("\nUploading thumbnail...");
-    try {
-      await youtube.thumbnails.set({
-        videoId: videoId,
-        media: {
-          body: fs.createReadStream(options.thumbnail),
-        },
-      });
-      console.log("Thumbnail uploaded!");
-      thumbnailUploaded = true;
-    } catch (err: any) {
-      console.error("THUMBNAIL_UPLOAD_FAILED:", err.message);
+    const YT_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+    const thumbStat = fs.statSync(options.thumbnail);
+    console.log(`\nUploading thumbnail (${(thumbStat.size / 1024).toFixed(1)} KB)...`);
+    if (thumbStat.size > YT_THUMBNAIL_MAX_BYTES) {
+      console.error(
+        `THUMBNAIL_UPLOAD_FAILED: File too large (${(thumbStat.size / 1024 / 1024).toFixed(1)} MB). ` +
+        `YouTube limit is 2 MB. Convert to JPEG or reduce resolution.`
+      );
+    } else {
+      try {
+        await youtube.thumbnails.set({
+          videoId: videoId,
+          media: {
+            body: fs.createReadStream(options.thumbnail),
+          },
+        });
+        console.log("Thumbnail uploaded!");
+        thumbnailUploaded = true;
+      } catch (err: any) {
+        console.error("THUMBNAIL_UPLOAD_FAILED:", err.message);
+      }
     }
   }
 
@@ -442,16 +451,25 @@ async function main() {
 
     // Upload thumbnail if provided
     if (options.thumbnail && fs.existsSync(options.thumbnail)) {
-      console.log("\nUploading thumbnail...");
-      try {
-        await youtube.thumbnails.set({
-          videoId: videoId,
-          media: { body: fs.createReadStream(options.thumbnail) },
-        });
-        console.log("Thumbnail uploaded!");
-        console.log("THUMBNAIL_UPLOADED: true");
-      } catch (err: any) {
-        console.error("THUMBNAIL_UPLOAD_FAILED:", err.message);
+      const YT_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
+      const thumbStat = fs.statSync(options.thumbnail);
+      console.log(`\nUploading thumbnail (${(thumbStat.size / 1024).toFixed(1)} KB)...`);
+      if (thumbStat.size > YT_THUMBNAIL_MAX_BYTES) {
+        console.error(
+          `THUMBNAIL_UPLOAD_FAILED: File too large (${(thumbStat.size / 1024 / 1024).toFixed(1)} MB). ` +
+          `YouTube limit is 2 MB. Convert to JPEG or reduce resolution.`
+        );
+      } else {
+        try {
+          await youtube.thumbnails.set({
+            videoId: videoId,
+            media: { body: fs.createReadStream(options.thumbnail) },
+          });
+          console.log("Thumbnail uploaded!");
+          console.log("THUMBNAIL_UPLOADED: true");
+        } catch (err: any) {
+          console.error("THUMBNAIL_UPLOAD_FAILED:", err.message);
+        }
       }
     }
 

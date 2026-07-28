@@ -1,6 +1,10 @@
 # Changelog — youtube-publisher
 
-Current version: `1.6.1`
+Current version: `1.6.2`
+
+## v1.6.2 (2026-07-28)
+
+- **Thumbnail 2 MB limit check**: All three thumbnail upload paths (main upload, `--subtitles-only` recovery, `upload-thumbnail.ts`) now validate file size before sending. Files exceeding YouTube's 2 MB limit are rejected with a clear error message instead of failing silently with "The provided image content is invalid."
 
 ## v1.6.1 (2026-07-28)
 
