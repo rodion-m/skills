@@ -264,18 +264,40 @@ async function uploadVideo(
               // Fetch full video resource (search returns search result, not video)
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const videoResp: any = await youtube.videos.list({
-                part: ["snippet", "status"],
+                part: ["snippet", "status", "contentDetails"],
                 id: [candidateId],
               });
               if (videoResp.data.items && videoResp.data.items.length > 0) {
-                // videos.list() returns items[] (not top-level .id like insert()).
-                // Reconstruct an insert-compatible response shape so the
-                // downstream response.data.id! on line ~293 works correctly.
-                // Without this, videoId becomes undefined and all subsequent
-                // operations (thumbnail, subtitles, description) fail silently.
                 const foundVideo = videoResp.data.items[0];
-                response = { data: { id: foundVideo.id!, ...foundVideo } } as any;
-                break;
+
+                // --- P0D guard: if YouTube accepted the metadata insert but the video
+                //     bytes didn't actually arrive (Premature close during upload), the
+                //     duration is "P0D" and processing will never start.  Delete the
+                //     metadata-only shell and keep retrying the real upload. ---
+                const contentDetails = (foundVideo as any)?.contentDetails;
+                if (contentDetails?.duration === "P0D") {
+                  console.log(
+                    `\n⚠️  Found video ${candidateId} but duration is P0D (metadata-only shell).`
+                  );
+                  console.log(`   Deleting empty shell and retrying upload...`);
+                  try {
+                    await youtube.videos.delete({ id: candidateId });
+                    console.log(`   Deleted empty shell ${candidateId}.`);
+                  } catch (delErr: any) {
+                    console.log(
+                      `   Could not delete shell ${candidateId}: ${delErr.message}.`
+                    );
+                  }
+                  // Don't break — fall through to the retry (line ~292)
+                } else {
+                  console.log(
+                    `\n   Content verified — duration: ${contentDetails?.duration || "unknown"}`
+                  );
+                  // Reconstruct an insert-compatible response shape so the
+                  // downstream response.data.id! works correctly.
+                  response = { data: { id: foundVideo.id!, ...foundVideo } } as any;
+                  break;
+                }
               }
             }
           }

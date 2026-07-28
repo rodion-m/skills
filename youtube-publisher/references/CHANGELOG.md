@@ -1,6 +1,10 @@
 # Changelog — youtube-publisher
 
-Current version: `1.6.0`
+Current version: `1.6.1`
+
+## v1.6.1 (2026-07-28)
+
+- **P0D guard**: When retry-recovering a server-side upload after "Premature close", verify the video has real content (`contentDetails.duration !== "P0D"`) before accepting it. P0D metadata-only shells are auto-deleted and the upload is retried properly instead of being treated as a successful recovery.
 
 ## v1.6.0 (2026-07-28)
 
