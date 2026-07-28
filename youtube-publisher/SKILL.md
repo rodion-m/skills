@@ -1,10 +1,10 @@
 ---
 name: youtube-publisher
 description: "Upload and publish videos to YouTube with title, description, tags, thumbnail and subtitles. Use for: youtube upload, publish video, share on youtube."
-version: 1.5.0
+version: 1.6.0
 setup_complete: true
 setup: "./SETUP.md"
-changelog: "v1.5.0: Fix retry recovery, add reusable duplicate-upload inspection, and typecheck production scripts. Full history: references/CHANGELOG.md."
+changelog: "v1.6.0: Add a parameterized, validated thumbnail-only recovery command and remove unsafe hardcoded repair actions. Full history: references/CHANGELOG.md."
 ---
 
 ## 🔴 Strict Execution Rule (Highest Priority)
@@ -185,6 +185,23 @@ npx ts-node youtube-upload.ts \
   --privacy public
 ```
 
+### Retry Only a Failed Thumbnail
+
+Use the dedicated recovery command when the video already exists and only its
+custom thumbnail needs to be uploaded again. It validates the video ID and
+local JPG/PNG file, retries transient failures, verifies that the target video
+is readable, and prints structured result markers.
+
+```bash
+npx ts-node upload-thumbnail.ts \
+  --video-id VIDEO_ID \
+  --thumbnail /path/to/cover.jpg \
+  --attempts 3
+```
+
+This command never deletes or uploads a video. Do not create one-off recovery
+scripts with hardcoded video IDs or local paths.
+
 ## Output
 
 On success, returns:
@@ -203,6 +220,12 @@ On success, returns:
 - Tags max: 500 characters total
 
 ## Changelog
+
+### v1.6.0 - Safe Thumbnail-Only Recovery (2026-07-28)
+
+- Added `upload-thumbnail.ts` with parameter validation, bounded retry, target-video verification, and structured output.
+- Removed the hardcoded thumbnail repair script that also deleted a fixed video ID.
+- Expanded the production TypeScript gate to cover the thumbnail recovery command.
 
 ### v1.1 - Resumable Upload + Retry (2026-04-22)
 

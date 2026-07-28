@@ -1,6 +1,12 @@
 # Changelog — youtube-publisher
 
-Current version: `1.5.0`
+Current version: `1.6.0`
+
+## v1.6.0 (2026-07-28)
+
+- Add `upload-thumbnail.ts` for safe thumbnail-only recovery with required CLI parameters, bounded retry, video verification, and structured output.
+- Remove the tracked hardcoded repair script that could permanently delete a fixed video ID.
+- Cover the thumbnail recovery command in the production TypeScript gate and document it in English and Chinese.
 
 ## v1.5.0 (2026-07-21)
 

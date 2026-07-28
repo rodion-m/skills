@@ -144,6 +144,22 @@ npx ts-node youtube-upload.ts \
   --privacy public
 ```
 
+### 仅补传失败的封面图
+
+视频已经存在、只有自定义封面上传失败时，使用专用恢复命令。命令会校验视频
+ID 和本地 JPG/PNG 文件，有限次数重试临时错误，确认目标视频可读取，并输出
+可供流水线判断的结构化结果。
+
+```bash
+npx ts-node upload-thumbnail.ts \
+  --video-id 视频ID \
+  --thumbnail /path/to/cover.jpg \
+  --attempts 3
+```
+
+此命令不会删除或上传视频。禁止再创建带固定视频 ID 或本地绝对路径的一次性
+恢复脚本。
+
 ## 输出结果
 
 上传成功后返回：
@@ -178,6 +194,12 @@ npx ts-node list-uploads.ts
 ```
 
 ## 更新日志
+
+### v1.6.0 - 安全的封面单独补传 (2026-07-28)
+
+- 新增 `upload-thumbnail.ts`，包含参数校验、有限重试、目标视频验证和结构化输出。
+- 删除会操作固定视频 ID、同时带删除动作的硬编码封面修复脚本。
+- 将封面恢复命令纳入生产 TypeScript 严格检查。
 
 ### v1.5.0 - 上传恢复与重复检测 (2026-07-21)
 

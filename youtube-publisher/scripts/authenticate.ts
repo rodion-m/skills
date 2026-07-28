@@ -2,7 +2,7 @@
  * authenticate.ts — Shared YouTube OAuth2 authentication module.
  *
  * Provides a single `authenticate()` function used by all YouTube API scripts:
- *   youtube-upload.ts, upload-captions.ts, fix-thumbnails.ts,
+ *   youtube-upload.ts, upload-captions.ts, upload-thumbnail.ts,
  *   youtube-update-description.ts.
  *
  * Token handling:
