@@ -1,8 +1,9 @@
 ---
 name: youtube-to-blog-post
 description: Convert YouTube videos to SEO-optimized blog posts. Extract video title, description, and content, then generate a search-engine-friendly blog post with embedded video, cover images, optimized metadata, structured Markdown sections, clean resource blocks, and canonical 5-8 keywords. Auto-generates English filenames and saves to the configured Hexo blog posts directory. Includes tag management rules to maintain a clean, consistent tag taxonomy.
-version: 4.8.0
+version: 4.8.1
 changelog:
+  - 2026-07-28: v4.8.1 对齐博客 v2.3.1；独立观看页播放器必须位于 H1 和说明文字之前，确保 Google 首屏可见与主体突出
   - 2026-07-28: v4.8.0 对齐博客 v2.3.0 页面职责分离；源 iframe 仅供 Hexo 生成观看页，渲染文章只输出封面入口，播放器与 VideoObject 仅允许出现在 /videos/<video_id>/
   - 2026-07-27: v4.7.1 明确生成文章永久链接会自动进入独立观看页的对应博客文章区域，发布门禁验证目标 HTML 真实存在
   - 2026-07-27: v4.7.0 对齐博客 v2.2.0 独立观看页契约；生成的 video_id 等元数据会在 Hexo 构建时自动产生 /videos/<video_id>/、视频索引和 video-sitemap.xml
@@ -210,7 +211,7 @@ copyright: true
 <div class="video-container"><iframe src="https://www.youtube.com/embed/VIDEO_ID" title="详细描述视频内容" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
 ```
 
-该 iframe 保留在 Markdown 源文件中，供站点生成 `/videos/<video_id>/`。Hexo v2.3.0 的最终文章 HTML 会把它替换为可点击的视频封面入口；真正的播放器与 `VideoObject` 只允许出现在独立观看页，文章页继续输出 `BlogPosting` 和 Twitter/X 大图。
+该 iframe 保留在 Markdown 源文件中，供站点生成 `/videos/<video_id>/`。Hexo v2.3.1 的最终文章 HTML 会把它替换为可点击的视频封面入口；真正的播放器与 `VideoObject` 只允许出现在独立观看页，并位于观看页 H1 与说明文字之前，文章页继续输出 `BlogPosting` 和 Twitter/X 大图。
 
 ### 文章结构（层次清晰）
 
@@ -665,6 +666,6 @@ keywords = ["VPS", "免费服务器", "虚拟服务器", "0成本", "VPS教程"]
 
 ---
 
-**版本**: 4.8.0 Article/Watch-Page Separation Contract
+**版本**: 4.8.1 Player-Prominent Watch-Page Contract
 **更新日期**: 2026-07-28
 **状态**: ✅ 已测试并上线
