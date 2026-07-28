@@ -268,7 +268,13 @@ async function uploadVideo(
                 id: [candidateId],
               });
               if (videoResp.data.items && videoResp.data.items.length > 0) {
-                response = videoResp;
+                // videos.list() returns items[] (not top-level .id like insert()).
+                // Reconstruct an insert-compatible response shape so the
+                // downstream response.data.id! on line ~293 works correctly.
+                // Without this, videoId becomes undefined and all subsequent
+                // operations (thumbnail, subtitles, description) fail silently.
+                const foundVideo = videoResp.data.items[0];
+                response = { data: { id: foundVideo.id!, ...foundVideo } } as any;
                 break;
               }
             }
