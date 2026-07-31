@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 from typing import Optional, Dict, Any
 import logging
+import mimetypes
 
 # 配置日志
 logging.basicConfig(
@@ -76,7 +77,8 @@ class ImageGenerator:
         style: Optional[str] = None,
         timeout: Optional[int] = None,
         max_retries: int = 3,
-        test_mode: bool = False
+        test_mode: bool = False,
+        reference_images: Optional[list[str]] = None,
     ) -> str:
         """
         生成图片
@@ -104,7 +106,8 @@ class ImageGenerator:
             )
         elif self.api_type == "gemini":
             return self._generate_gemini(
-                prompt, output_path, model, size, quality, style, timeout, max_retries
+                prompt, output_path, model, size, quality, style, timeout, max_retries,
+                reference_images=reference_images,
             )
         elif self.api_type == "runninghub":
             return self._generate_runninghub(
@@ -170,7 +173,7 @@ class ImageGenerator:
         quality: str = "standard",
         style: Optional[str] = None,
         timeout: Optional[int] = None,
-        max_retries: int = 3
+        max_retries: int = 3,
     ) -> str:
         """使用 ModelScope API 生成图片"""
 
@@ -318,7 +321,8 @@ class ImageGenerator:
         quality: str = "standard",
         style: Optional[str] = None,
         timeout: Optional[int] = None,
-        max_retries: int = 3
+        max_retries: int = 3,
+        reference_images: Optional[list[str]] = None,
     ) -> str:
         """使用 Gemini API 生成图片"""
 
@@ -335,29 +339,36 @@ class ImageGenerator:
         normalized_model = model if str(model).startswith("models/") else f"models/{model}"
         use_generate_images = "imagen" in normalized_model.lower()
         use_generate_content_image = not use_generate_images
+        reference_paths = [Path(path).expanduser().resolve() for path in (reference_images or [])]
+        missing_references = [str(path) for path in reference_paths if not path.is_file()]
+        if missing_references:
+            raise FileNotFoundError(f"参考图片不存在: {missing_references}")
+        if use_generate_images and reference_paths:
+            raise ValueError("Imagen 文生图接口不支持 --reference-image；请使用 Gemini 图片模型")
 
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(api_key=api_key)
         aspect_ratio = self._size_to_aspect_ratio(size)
         image_size = self._gemini_image_size(size)
         output_mime_type = "image/png" if str(output_path or "").lower().endswith(".png") else "image/jpeg"
-        config = types.GenerateImagesConfig(
-            number_of_images=1,
-            aspect_ratio=aspect_ratio,
-            output_mime_type=output_mime_type,
-            safety_filter_level="BLOCK_ONLY_HIGH",
-        )
-        if use_generate_images:
-            config.image_size = image_size
 
         logger.info(f"📝 开始生成图片: {prompt[:50]}...")
         logger.info(f"   模型: {normalized_model}, 画面比例: {aspect_ratio} ({size}), 输出尺寸档位: {image_size}")
+        if reference_paths:
+            logger.info(f"   参考图片: {len(reference_paths)} 张")
 
         for attempt in range(max_retries):
             try:
                 if use_generate_images:
+                    from google import genai
+                    from google.genai import types
+
+                    client = genai.Client(api_key=api_key)
+                    config = types.GenerateImagesConfig(
+                        number_of_images=1,
+                        aspect_ratio=aspect_ratio,
+                        output_mime_type=output_mime_type,
+                        safety_filter_level="BLOCK_ONLY_HIGH",
+                        image_size=image_size,
+                    )
                     response = client.models.generate_images(
                         model=normalized_model,
                         prompt=prompt,
@@ -370,13 +381,54 @@ class ImageGenerator:
                     return self._save_gemini_generated_image(generated_images[0], output_path)
 
                 if use_generate_content_image:
-                    response = client.models.generate_content(
-                        model=normalized_model,
-                        contents=f"Create an image: {prompt}\n\nReturn the image directly. Do not return a text prompt, explanation, or markdown.",
-                        config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                    parts = [{
+                        "text": (
+                            f"Create or edit an image according to this request: {prompt}\n\n"
+                            "Return the image directly. Do not return a text prompt, explanation, or markdown."
+                        )
+                    }]
+                    for reference_path in reference_paths:
+                        mime_type = mimetypes.guess_type(reference_path.name)[0] or "image/png"
+                        parts.append({
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": base64.b64encode(reference_path.read_bytes()).decode("ascii"),
+                            }
+                        })
+                    api_url = self.api_config.get("api_url")
+                    if not api_url:
+                        api_url = (
+                            "https://generativelanguage.googleapis.com/v1beta/"
+                            f"{normalized_model}:generateContent"
+                        )
+                    response = requests.post(
+                        api_url,
+                        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                        json={
+                            "contents": [{"role": "user", "parts": parts}],
+                            "generationConfig": {
+                                "responseModalities": ["IMAGE"],
+                                "imageConfig": {
+                                    "aspectRatio": aspect_ratio,
+                                    "imageSize": image_size.replace("IMAGE_SIZE_", ""),
+                                },
+                            },
+                        },
+                        timeout=timeout,
                     )
-                    logger.info("✅ 图片生成成功")
-                    return self._save_gemini_content_response_image(response, output_path)
+                    response.raise_for_status()
+                    response_payload = response.json()
+                    for candidate in response_payload.get("candidates", []):
+                        for part in candidate.get("content", {}).get("parts", []):
+                            inline_data = part.get("inlineData") or part.get("inline_data") or {}
+                            data = inline_data.get("data")
+                            if data:
+                                image = Image.open(BytesIO(base64.b64decode(data)))
+                                logger.info("✅ 图片生成成功")
+                                return self._save_image_from_pil(image, output_path)
+                    raise RuntimeError(
+                        f"Gemini generateContent 未返回图片: {json.dumps(response_payload, ensure_ascii=False)[:800]}"
+                    )
 
                 raise RuntimeError("不支持的 Gemini 图片生成模式")
 
@@ -576,17 +628,24 @@ def main():
     parser.add_argument("prompt", help="图片描述")
     parser.add_argument("--output", help="输出路径")
     parser.add_argument("--api-type", default=None, help="API 类型 (modelscope/gemini/runninghub)，未传时从 config.json 的 default_api 读取")
+    parser.add_argument("--config", help="配置文件路径（默认 ~/.claude/skills/image-generator/config.json）")
     parser.add_argument("--model", help="指定模型")
     parser.add_argument("--size", default="1024x1024", help="图片尺寸")
     parser.add_argument("--quality", default="standard", help="生成质量")
     parser.add_argument("--style", help="风格")
     parser.add_argument("--timeout", type=int, help="超时时间（秒）")
     parser.add_argument("--test", action="store_true", help="测试模式")
+    parser.add_argument(
+        "--reference-image",
+        action="append",
+        default=[],
+        help="参考图片路径，可重复传入；Gemini 图片模型会按参考图编辑/生成",
+    )
 
     args = parser.parse_args()
 
     try:
-        generator = ImageGenerator(api_type=args.api_type)
+        generator = ImageGenerator(api_type=args.api_type, config_path=Path(args.config) if args.config else None)
         image_path = generator.generate(
             prompt=args.prompt,
             output_path=args.output,
@@ -595,7 +654,8 @@ def main():
             quality=args.quality,
             style=args.style,
             timeout=args.timeout,
-            test_mode=args.test
+            test_mode=args.test,
+            reference_images=args.reference_image,
         )
         print(f"✅ 图片生成完成: {image_path}")
     except Exception as e:

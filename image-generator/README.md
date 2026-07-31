@@ -1,7 +1,7 @@
 # Image Generator Skill
 
 > 仓库地址: https://github.com/wlzh/skills
-> **版本**: v1.1.0
+> **版本**: v1.2.0
 
 通用图片生成 Skill，支持多种 AI 模型，可被其他 Skills 直接调用。
 
@@ -14,6 +14,7 @@
 - 💾 自动保存生成的图片
 - 🛡️ 错误处理和重试机制
 - 🧪 测试模式支持（无需 API Key）
+- 🖼️ Gemini 参考图编辑与人物身份保持
 
 ## 快速开始
 
@@ -28,6 +29,18 @@ python3 ~/.claude/skills/image-generator/generate_image.py "A golden cat" --api-
 
 # 自定义输出路径
 python3 ~/.claude/skills/image-generator/generate_image.py "A golden cat" --output ~/my_image.jpg
+
+# 使用参考图生成 4:5 人像（可重复传入 --reference-image）
+python3 ~/.claude/skills/image-generator/generate_image.py \
+  "保留人物身份，改为正面摄影棚头肩照" \
+  --reference-image /path/to/person.png \
+  --size 1024x1280 \
+  --output /path/to/portrait.png
+
+# 显式指定配置文件
+python3 ~/.claude/skills/image-generator/generate_image.py \
+  "A golden cat" \
+  --config /path/to/config.json
 
 # 测试模式（无需 API Key）
 python3 ~/.claude/skills/image-generator/generate_image.py "A golden cat" --test
@@ -193,7 +206,8 @@ class ImageGenerator:
         style: Optional[str] = None,         # 风格
         timeout: Optional[int] = None,        # 超时时间
         max_retries: int = 3,                # 最大重试次数
-        test_mode: bool = False               # 测试模式
+        test_mode: bool = False,              # 测试模式
+        reference_images: list[str] = None    # Gemini 参考图片
     ) -> str:                                # 返回图片路径
 ```
 
@@ -206,6 +220,7 @@ image-generator/
 ├── config.json             # 配置文件
 ├── generate_image.py       # 主模块
 ├── examples.py             # 使用示例
+├── tests/                  # 回归测试
 └── scripts/                # 脚本目录
 ```
 

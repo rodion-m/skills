@@ -1,7 +1,7 @@
 ---
 name: image-generator
 description: 通用图片生成 Skill，支持多种 AI 模型（ModelScope、Gemini、RunningHub 等），可被其他 Skills 调用
-version: 1.1.0
+version: 1.2.0
 author: M.
 ---
 
@@ -37,6 +37,13 @@ python3 ~/.claude/skills/image-generator/generate_image.py \
 
 # 指定输出路径
 python3 ~/.claude/skills/image-generator/generate_image.py "A golden cat" --output /path/to/image.jpg
+
+# 参考图编辑/身份保持（Gemini 图片模型）
+python3 ~/.claude/skills/image-generator/generate_image.py \
+  "保留人物身份，改为正面摄影棚头肩照" \
+  --reference-image /path/to/person.png \
+  --size 1024x1280 \
+  --output /path/to/portrait.png
 
 # 指定模型
 python3 ~/.claude/skills/image-generator/generate_image.py "A golden cat" --model "Tongyi-MAI/Z-Image-Turbo"
@@ -190,7 +197,8 @@ generator.generate(
     style: str = None,               # 风格（可选）
     timeout: int = 300,              # 超时时间（秒）
     max_retries: int = 3,            # 最大重试次数
-    test_mode: bool = False          # 测试模式
+    test_mode: bool = False,         # 测试模式
+    reference_images: list[str] = None # Gemini 参考图片，可传多张
 ) -> str                             # 返回图片路径
 ```
 
