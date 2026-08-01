@@ -6,9 +6,28 @@
     "model": "speech-2.8-hd",
     "voice_id": "Chinese (Mandarin)_Reliable_Executive",
     "voice_name": "可靠高管",
+    "local_voice_profile": "~/.config/duanku/minimax-voice.json",
     "speed": 1.0,
     "volume": 1.0,
     "pitch": 0,
+    "delivery_consistency": {
+      "enabled": true,
+      "default_profile": "commercial_narration",
+      "profiles": {
+        "commercial_narration": {
+          "speed": 0.96,
+          "volume": 1.0,
+          "pitch": 0,
+          "description": "整期商业解说固定表达：自然、可信、不过度表演，禁止逐句关键词改变声调"
+        },
+        "neutral": {
+          "speed": 1.0,
+          "volume": 1.0,
+          "pitch": 0,
+          "description": "完全中性固定表达"
+        }
+      }
+    },
     "context_adaptation": {
       "enabled": true,
       "default_context": "explanation",

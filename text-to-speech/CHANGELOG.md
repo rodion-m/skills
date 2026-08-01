@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.4.0 - 2026-08-01
+
+- 新增 `minimax_voice_clone.py`，包含样本格式/时长/大小门禁、声音授权确认、官方费用报价和首次 TTS 激活确认。
+- 克隆音色记录写入本机 `~/.config/duanku/minimax-voice.json` 并强制 `0600`，API Key 和账户音色信息不提交仓库。
+- 默认启用整期 `commercial_narration` 表达档，同一期所有 beat 固定 speed、volume、pitch，关闭逐句关键词自动变调。
+- 克隆音色选择优先于仓库系统音色；未激活的克隆不会被选中。
+- 严格限定克隆 profile、整期表达档和相关门禁只在 MiniMax 分支生效；Edge/Kokoro 完全跳过。
+- 新增克隆报价、私有 profile、音色选择和整期一致性测试。
+
 ## v3.3.1 - 2026-07-18
 
 - 移除 MiniMax 逐 beat `emotion` 参数，避免分段 TTS 在同一场景中产生明显语气跳变。

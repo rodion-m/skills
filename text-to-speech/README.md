@@ -1,7 +1,7 @@
 # text-to-speech
 
 > 仓库地址: https://github.com/wlzh/skills
-> 版本: v3.3.1
+> 版本: v3.4.0
 
 文本转语音工具 - 默认 MiniMax TTS，支持切换 Kokoro TTS 和 Edge TTS，保留播客脚本解析、情绪标记和后处理。
 
@@ -25,7 +25,8 @@ python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py script.txt --e
 ## 功能特性
 
 - 🎤 **默认 MiniMax TTS** - 默认音色 `Chinese (Mandarin)_Reliable_Executive`（可靠高管）
-- 🗣️ **MiniMax 语境适配** - 自动按开场、解释、步骤、提醒、总结、关注引导等语境轻量调整表达
+- 🧬 **MiniMax 声音克隆** - 样本门禁、授权确认、费用报价、首次激活和本机私有音色档
+- 🎚️ **整期表达一致性** - 商业解说默认固定 speed/volume/pitch，不再逐句自动变调
 - 🔁 **多引擎切换** - `tts_engine` 可配置为 `minimax`、`kokoro` 或 `edge`
 - 📝 **脚本解析** - 自动识别并移除播客脚本中的注释和标记
 - 🎭 **情绪标记** - 支持 SSML 情绪标记处理（可配置）
@@ -83,6 +84,7 @@ usage: text_to_speech.py [-h] [-o OUTPUT] [-c CONFIG] [-v VOICE]
                          [--engine {minimax,edge,kokoro}]
                          [--rate RATE] [--pitch PITCH] [--volume VOLUME]
                          [--speed SPEED] [--context CONTEXT]
+                         [--delivery-profile DELIVERY_PROFILE]
                          [--post-process] [--list-voices]
                          input
 
@@ -97,6 +99,7 @@ usage: text_to_speech.py [-h] [-o OUTPUT] [-c CONFIG] [-v VOICE]
   --volume             音量调整（Edge 或 MiniMax）
   --speed              语速（MiniMax/Kokoro，如 1.0）
   --context            MiniMax 专属语境档；默认自动识别，Edge/Kokoro 忽略
+  --delivery-profile   MiniMax 整期表达档；默认 commercial_narration
   --post-process       启用后处理（voice-changer）
   --list-voices        列出所有可用的声音
 ```
@@ -165,6 +168,19 @@ echo "你好，世界！欢迎使用 Text-to-Speech。" | \
 ```bash
 python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py --list-voices
 ```
+
+### 示例 7: 检查声音克隆样本和生成费用报价
+
+```bash
+python3 scripts/minimax_voice_clone.py inspect --sample /path/to/source.m4a
+python3 scripts/minimax_voice_clone.py quote \
+  --voice-id DuankuNarrator20260801 \
+  --text "大家好，欢迎来到纯棉短裤。"
+```
+
+克隆创建不立即收费，首次用新音色执行 TTS 才收取克隆费。激活命令必须提交报价 ID 和精确金额。本机音色档保存在 `~/.config/duanku/minimax-voice.json`，权限固定为 `0600`。
+
+克隆音色与 `--delivery-profile` 均为 MiniMax 专属能力。`tts_engine` 或 `--engine` 选择 Edge/Kokoro 时，不读取本机克隆 profile，也不执行克隆样本和激活状态门禁。
 
 ## 配置文件
 

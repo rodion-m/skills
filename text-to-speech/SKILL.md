@@ -1,8 +1,9 @@
 ---
 name: text-to-speech
 description: 文本转语音工具 - 默认 MiniMax TTS，支持切换 Edge TTS 和 Kokoro TTS (v1.1-zh)
-version: 3.3.1
+version: 3.4.0
 changelog:
+  - 2026-08-01: v3.4.0 新增 MiniMax 声音克隆上传/创建/激活费用门禁、本机 0600 克隆音色档，以及整期固定 commercial_narration 表达档；克隆音色或表达档变化会使下游缓存失效
   - 2026-07-18: v3.3.1 MiniMax 语境适配移除逐 beat emotion 注入，避免同一场景语气跳变；保留 speed/volume/pitch 轻量调整并同步测试文档
   - 2026-07-18: v3.3.0 MiniMax 默认音色改为 Chinese (Mandarin)_Reliable_Executive；新增 MiniMax 专属语境适配层，按开场、总结、解释、步骤、提醒、资源、结论和关注引导自动微调表达；Edge/Kokoro 行为不变
   - 2026-07-17: v3.2.0 新增 MiniMax TTS 引擎并设为默认，默认音色 male-qn-jingying（精英青年）、语速 1.0；API Key 只读取 MINIMAX_API_KEY 环境变量；保留 Kokoro/Edge 可配置切换
@@ -60,11 +61,20 @@ python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py --list-voices
 - 语速：`1.0`
 - 输出：MP3
 
-### MiniMax 专属语境适配
+### 整期表达一致性（默认）
+
+`minimax_tts.delivery_consistency` 默认启用 `commercial_narration`。同一期视频内所有句子固定使用相同的音色、速度、音量和音调，不再按每句话的关键词切换表达参数。这样保留真人音色和自然标点韵律，同时避免逐 beat 的语速、声调和情绪跳变。
+
+- 默认档：`commercial_narration`，speed `0.96`、volume `1.0`、pitch `0`
+- 显式选择：`--delivery-profile commercial_narration`
+- 克隆音色选择顺序：`--voice` > `MINIMAX_VOICE_ID` > 已激活的本机克隆档 > 仓库系统音色
+- 本机档：`~/.config/duanku/minimax-voice.json`，必须为 `0600`，不提交仓库
+
+### MiniMax 专属语境适配（兼容回退）
 
 `minimax_tts.context_adaptation` 只在 MiniMax 分支生效。Edge 和 Kokoro 不读取此配置，也不会改变原请求参数。
 
-- 默认根据文本自动识别 `opening`、`summary`、`explanation`、`instruction`、`warning`、`resource`、`conclusion`、`call_to_action`、`neutral`
+- 仅当 `delivery_consistency` 关闭时，根据文本自动识别 `opening`、`summary`、`explanation`、`instruction`、`warning`、`resource`、`conclusion`、`call_to_action`、`neutral`
 - 语境档只轻量调整 MiniMax 的语速、音量和音高，不修改原文、不注入 emotion、不自动插入声音标签
 - 未命中规则时使用 `explanation`
 - 可用 `--context warning` 等参数显式覆盖自动识别；选择 Edge/Kokoro 时该参数被忽略
@@ -78,9 +88,41 @@ python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py script.txt
 python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py script.txt --context warning
 ```
 
+### MiniMax 声音克隆
+
+声音克隆分为不收费的创建阶段和首次 TTS 激活阶段。首次使用新克隆音色合成会产生官方克隆费及试听字符费，脚本要求 quote ID 和精确金额确认，不能用布尔参数绕过。
+
+**引擎边界**：克隆 profile、克隆 `voice_id`、`--delivery-profile` 和克隆样本门禁只允许在实际 `tts_engine=minimax` 时读取。切换到 Edge 或 Kokoro 后必须完全跳过这些配置，即使本机仍保留已激活的 MiniMax profile，也不得影响非 MiniMax 的音色、请求参数或预检结果。
+
+```bash
+# 样本检查，不联网、不收费
+python3 scripts/minimax_voice_clone.py inspect --sample /path/to/source.m4a
+
+# 输出激活报价，不联网、不收费
+python3 scripts/minimax_voice_clone.py quote \
+  --voice-id DuankuNarrator20260801 \
+  --text "试听文案"
+
+# 上传并创建克隆，不执行 TTS；必须确认拥有声音授权
+python3 scripts/minimax_voice_clone.py clone \
+  --sample /path/to/source.m4a \
+  --voice-id DuankuNarrator20260801 \
+  --rights-confirmed
+
+# 首次付费激活并生成试听，必须使用上一步 quote 的 ID 和金额
+python3 scripts/minimax_voice_clone.py activate \
+  --text "试听文案" \
+  --output /path/to/preview.mp3 \
+  --confirm-quote-id '<quote_id>' \
+  --confirm-amount-usd '<estimated_total_usd>'
+```
+
+样本要求：`mp3/m4a/wav`、10 秒至 5 分钟、最大 20 MB。克隆脚本默认请求 MiniMax 降噪和音量归一化。
+
 密钥规则：
 
 - API Key 只从环境变量读取，默认变量名 `MINIMAX_API_KEY`
+- 克隆 `voice_id`、远程 file ID 和激活记录只保存在本机 `0600` profile
 - 不要把真实 Key 写进 `config/tts_config.json`、README、命令行参数或提交历史
 - 如果要换变量名，只改 `config/tts_config.json` 中的 `minimax_tts.api_key_env`
 

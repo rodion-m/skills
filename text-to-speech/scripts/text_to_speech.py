@@ -84,6 +84,47 @@ class TextToSpeech:
         print(f"   解析后: {len(parsed_text)} 字符, {parsed_lines} 行")
         return parsed_text
 
+    def _load_local_voice_profile(self):
+        minimax_config = self.config.get('minimax_tts', {})
+        configured = os.environ.get('MINIMAX_VOICE_PROFILE') or minimax_config.get(
+            'local_voice_profile', '~/.config/duanku/minimax-voice.json'
+        )
+        path = Path(configured).expanduser()
+        if not path.exists():
+            return {}
+        try:
+            profile = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if profile.get('provider') != 'minimax' or not profile.get('active'):
+            return {}
+        return profile
+
+    def _resolve_minimax_voice(self, requested_voice=None):
+        """Resolve explicit, environment, local cloned, then repository voice."""
+        if requested_voice:
+            return requested_voice, 'explicit'
+        env_voice = os.environ.get('MINIMAX_VOICE_ID', '').strip()
+        if env_voice:
+            return env_voice, 'environment'
+        local_profile = self._load_local_voice_profile()
+        if local_profile.get('voice_id'):
+            return str(local_profile['voice_id']), 'local_clone_profile'
+        minimax_config = self.config.get('minimax_tts', {})
+        return minimax_config.get('voice_id', 'Chinese (Mandarin)_Reliable_Executive'), 'repository_default'
+
+    def _resolve_delivery_profile(self, requested_profile=None):
+        minimax_config = self.config.get('minimax_tts', {})
+        consistency = minimax_config.get('delivery_consistency', {})
+        if not consistency.get('enabled', False):
+            return None, {}
+        profile_name = requested_profile or consistency.get('default_profile')
+        profiles = consistency.get('profiles', {})
+        if profile_name not in profiles:
+            available = ', '.join(sorted(profiles))
+            raise ValueError(f"未知 MiniMax 整期表达档 {profile_name!r}，可用值: {available}")
+        return profile_name, profiles[profile_name]
+
     def _resolve_minimax_context(self, text, requested_context=None):
         """Resolve MiniMax-only delivery settings from explicit or textual context."""
         minimax_config = self.config.get('minimax_tts', {})
@@ -185,7 +226,7 @@ class TextToSpeech:
             return None
 
     async def synthesize_minimax(self, text, output_file, voice=None, speed=None, volume=None, pitch=None,
-                                 context=None):
+                                 context=None, delivery_profile=None):
         """使用 MiniMax T2A API 合成语音。"""
         minimax_config = self.config.get('minimax_tts', {})
         api_key_env = minimax_config.get('api_key_env', 'MINIMAX_API_KEY')
@@ -196,16 +237,21 @@ class TextToSpeech:
 
         endpoint = minimax_config.get('endpoint', 'https://api.minimaxi.com/v1/t2a_v2')
         model = minimax_config.get('model', 'speech-2.8-hd')
-        voice = voice or minimax_config.get('voice_id', 'Chinese (Mandarin)_Reliable_Executive')
+        voice, voice_source = self._resolve_minimax_voice(voice)
         speed = float(speed if speed is not None else minimax_config.get('speed', 1.0))
         volume = float(volume if volume is not None else minimax_config.get('volume', 1.0))
         pitch = int(pitch if pitch is not None else minimax_config.get('pitch', 0))
         try:
-            context_name, context_profile = self._resolve_minimax_context(text, context)
+            delivery_name, delivery_settings = self._resolve_delivery_profile(delivery_profile)
+            context_name, context_profile = (None, {}) if delivery_settings else self._resolve_minimax_context(text, context)
         except ValueError as exc:
             print(f"❌ {exc}")
             return None
-        if context_profile:
+        if delivery_settings:
+            speed = float(delivery_settings.get('speed', speed))
+            volume = float(delivery_settings.get('volume', volume))
+            pitch = int(delivery_settings.get('pitch', pitch))
+        elif context_profile:
             speed *= float(context_profile.get('speed_multiplier', 1.0))
             volume *= float(context_profile.get('volume_multiplier', 1.0))
             pitch += int(context_profile.get('pitch_offset', 0))
@@ -240,6 +286,9 @@ class TextToSpeech:
         print(f"🎤 引擎: MiniMax TTS")
         print(f"   模型: {model}")
         print(f"   声音: {voice}")
+        print(f"   声音来源: {voice_source}")
+        if delivery_name:
+            print(f"   整期表达档: {delivery_name}（禁用逐句自动变调）")
         if context_name:
             print(f"   MiniMax 语境: {context_name}")
         print(f"   语速: {speed}, 音量: {volume}, 音调: {pitch}")
@@ -290,12 +339,14 @@ class TextToSpeech:
         return output_file
 
     async def synthesize(self, text, output_file, voice=None, rate=None, pitch=None, volume=None, speed=None,
-                         context=None):
+                         context=None, delivery_profile=None):
         """根据引擎选择合成方式"""
         if self.engine == 'kokoro':
             return await self.synthesize_kokoro(text, output_file, voice, speed)
         if self.engine == 'minimax':
-            return await self.synthesize_minimax(text, output_file, voice, speed, volume, pitch, context)
+            return await self.synthesize_minimax(
+                text, output_file, voice, speed, volume, pitch, context, delivery_profile
+            )
         else:
             return await self.synthesize_edge(text, output_file, voice, rate, pitch, volume)
 
@@ -346,7 +397,7 @@ class TextToSpeech:
         return str(output_file)
 
     async def convert(self, input_source, output_file=None, voice=None, rate=None, pitch=None, volume=None, speed=None,
-                      context=None):
+                      context=None, delivery_profile=None):
         print("=" * 60)
         print("🎙️  Text-to-Speech")
         print("=" * 60)
@@ -369,7 +420,9 @@ class TextToSpeech:
             output_file
         )
 
-        audio_file = await self.synthesize(parsed_text, output_file, voice, rate, pitch, volume, speed, context)
+        audio_file = await self.synthesize(
+            parsed_text, output_file, voice, rate, pitch, volume, speed, context, delivery_profile
+        )
         if audio_file is None:
             return None
 
@@ -417,6 +470,7 @@ def main():
     parser.add_argument('--volume', help='音量调整（Edge TTS: 如 +20%%）')
     parser.add_argument('--speed', type=float, help='语速（MiniMax/Kokoro: 如 1.0）')
     parser.add_argument('--context', help='MiniMax 专属语境档；不影响 Edge/Kokoro，默认按文本自动识别')
+    parser.add_argument('--delivery-profile', help='MiniMax 整期表达档；启用后所有句子固定语速、音量和音调')
     parser.add_argument('--post-process', action='store_true', help='启用后处理（voice-changer）')
     parser.add_argument('--list-voices', action='store_true', help='列出所有可用的声音')
 
@@ -459,6 +513,7 @@ def main():
         args.volume,
         args.speed,
         args.context,
+        args.delivery_profile,
     ))
     sys.exit(0 if result else 1)
 
