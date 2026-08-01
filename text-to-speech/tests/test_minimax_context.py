@@ -122,6 +122,95 @@ class MiniMaxContextTests(unittest.TestCase):
         self.assertEqual(payload["voice_setting"]["pitch"], -1)
         self.assertNotIn("emotion", payload["voice_setting"])
 
+    def test_minimax_subtitle_sidecar_is_downloaded_validated_and_sanitized(self):
+        tts = make_tts()
+
+        class Response:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return json.dumps(self.payload).encode("utf-8")
+
+        api_response = Response({
+            "data": {
+                "audio": "00",
+                "subtitle_file": "https://subtitle.example.invalid/signed-file",
+            },
+            "base_resp": {"status_code": 0},
+        })
+        subtitle_response = Response([
+            {
+                "text": "第一步",
+                "time_begin": 0.0,
+                "time_end": 680.0,
+                "text_begin": 0,
+                "text_end": 3,
+            },
+            {
+                "text": "第二步",
+                "time_begin": 920.0,
+                "time_end": 1600.0,
+                "text_begin": 11,
+                "text_end": 14,
+            },
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "speech.mp3"
+            sidecar = Path(tmp) / "speech.subtitles.json"
+            with (
+                mock.patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key"}),
+                mock.patch.object(
+                    MODULE.urllib.request,
+                    "urlopen",
+                    side_effect=[api_response, subtitle_response],
+                ) as urlopen,
+            ):
+                result = asyncio.run(tts.synthesize_minimax(
+                    "第一步<#0.18#>第二步",
+                    str(output),
+                    subtitle_output=str(sidecar),
+                ))
+            document = json.loads(sidecar.read_text(encoding="utf-8"))
+
+        self.assertEqual(result, str(output))
+        request = urlopen.call_args_list[0].args[0]
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertTrue(payload["subtitle_enable"])
+        self.assertEqual(payload["subtitle_type"], "word")
+        self.assertEqual(document["provider"], "minimax")
+        self.assertEqual(len(document["segments"]), 2)
+        self.assertNotIn("subtitle_file", document)
+
+    def test_minimax_subtitle_segments_reject_non_monotonic_times(self):
+        with self.assertRaisesRegex(ValueError, "ordering"):
+            MODULE.validate_minimax_subtitle_segments([
+                {"text": "二", "time_begin": 20, "time_end": 30, "text_begin": 1, "text_end": 2},
+                {"text": "一", "time_begin": 10, "time_end": 15, "text_begin": 0, "text_end": 1},
+            ])
+
+    def test_minimax_subtitle_segments_reject_non_monotonic_text_ranges(self):
+        with self.assertRaisesRegex(ValueError, "ordering"):
+            MODULE.validate_minimax_subtitle_segments([
+                {"text": "二", "time_begin": 10, "time_end": 20, "text_begin": 2, "text_end": 3},
+                {"text": "一", "time_begin": 30, "time_end": 40, "text_begin": 1, "text_end": 2},
+            ])
+
+    def test_non_minimax_rejects_subtitle_sidecar(self):
+        tts = make_tts("edge")
+        with mock.patch.object(tts, "synthesize_edge", new=mock.AsyncMock()) as edge:
+            result = asyncio.run(tts.synthesize(
+                "测试", "edge.mp3", subtitle_output="edge.subtitles.json"
+            ))
+        self.assertIsNone(result)
+        edge.assert_not_awaited()
+
     def test_edge_does_not_resolve_minimax_context(self):
         tts = make_tts("edge")
         with (

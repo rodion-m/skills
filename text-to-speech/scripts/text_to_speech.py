@@ -8,15 +8,63 @@ import argparse
 import asyncio
 import binascii
 import json
+import math
 import os
 import re
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
 os.environ.setdefault("no_proxy", "localhost,127.0.0.1,::1")
 os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1,::1")
+
+
+def validate_minimax_subtitle_segments(segments):
+    """Validate MiniMax word/sentence timestamp records before persistence."""
+    if not isinstance(segments, list) or not segments:
+        raise ValueError("MiniMax subtitle file must contain a non-empty list")
+    previous_begin = -1.0
+    previous_text_begin = -1
+    validated = []
+    for index, raw in enumerate(segments, 1):
+        if not isinstance(raw, dict):
+            raise ValueError(f"MiniMax subtitle segment {index} is not an object")
+        text = str(raw.get("text", "")).strip()
+        try:
+            time_begin = float(raw["time_begin"])
+            time_end = float(raw["time_end"])
+            text_begin = int(raw["text_begin"])
+            text_end = int(raw["text_end"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"MiniMax subtitle segment {index} has invalid fields") from exc
+        if (
+            not text
+            or not math.isfinite(time_begin)
+            or not math.isfinite(time_end)
+            or time_begin < 0
+            or time_end <= time_begin
+            or time_begin < previous_begin
+            or text_begin < 0
+            or text_end <= text_begin
+            or text_begin < previous_text_begin
+        ):
+            raise ValueError(f"MiniMax subtitle segment {index} violates timestamp/text ordering")
+        validated.append(raw)
+        previous_begin = time_begin
+        previous_text_begin = text_begin
+    return validated
+
+
+def download_minimax_subtitles(url, timeout=180):
+    """Download and validate the provider subtitle sidecar without storing its signed URL."""
+    parts = urlsplit(str(url))
+    if parts.scheme != "https" or not parts.netloc:
+        raise ValueError("MiniMax subtitle URL must be HTTPS")
+    with urllib.request.urlopen(str(url), timeout=timeout) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return validate_minimax_subtitle_segments(payload)
 
 
 class ScriptParser:
@@ -226,7 +274,7 @@ class TextToSpeech:
             return None
 
     async def synthesize_minimax(self, text, output_file, voice=None, speed=None, volume=None, pitch=None,
-                                 context=None, delivery_profile=None):
+                                 context=None, delivery_profile=None, subtitle_output=None):
         """使用 MiniMax T2A API 合成语音。"""
         minimax_config = self.config.get('minimax_tts', {})
         api_key_env = minimax_config.get('api_key_env', 'MINIMAX_API_KEY')
@@ -277,8 +325,10 @@ class TextToSpeech:
                 "format": audio_format,
                 "channel": minimax_config.get('channel', 1),
             },
-            "subtitle_enable": False,
+            "subtitle_enable": bool(subtitle_output),
         }
+        if subtitle_output:
+            payload["subtitle_type"] = "word"
         language_boost = minimax_config.get('language_boost')
         if language_boost:
             payload["language_boost"] = language_boost
@@ -333,19 +383,54 @@ class TextToSpeech:
             print(f"❌ MiniMax TTS 响应解析失败: {exc}")
             return None
 
+        subtitle_document = None
+        if subtitle_output:
+            subtitle_url = (data.get("data") or {}).get("subtitle_file")
+            if not subtitle_url:
+                print("❌ MiniMax TTS 未返回请求的字幕时间戳")
+                return None
+            try:
+                segments = download_minimax_subtitles(
+                    subtitle_url, timeout=minimax_config.get('timeout', 180)
+                )
+            except (OSError, ValueError, json.JSONDecodeError, urllib.error.URLError) as exc:
+                print(f"❌ MiniMax TTS 字幕下载或校验失败: {exc}")
+                return None
+            subtitle_document = {
+                "schema_version": 1,
+                "provider": "minimax",
+                "model": model,
+                "voice_id": voice,
+                "subtitle_type": "word",
+                "segments": segments,
+            }
+
         with open(output_file, 'wb') as f:
             f.write(audio_bytes)
+        if subtitle_output:
+            subtitle_path = Path(subtitle_output).expanduser()
+            subtitle_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = subtitle_path.with_suffix(subtitle_path.suffix + ".tmp")
+            temp_path.write_text(
+                json.dumps(subtitle_document, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            temp_path.replace(subtitle_path)
         print(f"✅ 语音合成完成: {output_file}")
         return output_file
 
     async def synthesize(self, text, output_file, voice=None, rate=None, pitch=None, volume=None, speed=None,
-                         context=None, delivery_profile=None):
+                         context=None, delivery_profile=None, subtitle_output=None):
         """根据引擎选择合成方式"""
+        if subtitle_output and self.engine != 'minimax':
+            print("❌ --subtitle-output 仅支持 MiniMax TTS")
+            return None
         if self.engine == 'kokoro':
             return await self.synthesize_kokoro(text, output_file, voice, speed)
         if self.engine == 'minimax':
             return await self.synthesize_minimax(
-                text, output_file, voice, speed, volume, pitch, context, delivery_profile
+                text, output_file, voice, speed, volume, pitch, context, delivery_profile,
+                subtitle_output
             )
         else:
             return await self.synthesize_edge(text, output_file, voice, rate, pitch, volume)
@@ -397,7 +482,7 @@ class TextToSpeech:
         return str(output_file)
 
     async def convert(self, input_source, output_file=None, voice=None, rate=None, pitch=None, volume=None, speed=None,
-                      context=None, delivery_profile=None):
+                      context=None, delivery_profile=None, subtitle_output=None):
         print("=" * 60)
         print("🎙️  Text-to-Speech")
         print("=" * 60)
@@ -421,7 +506,8 @@ class TextToSpeech:
         )
 
         audio_file = await self.synthesize(
-            parsed_text, output_file, voice, rate, pitch, volume, speed, context, delivery_profile
+            parsed_text, output_file, voice, rate, pitch, volume, speed, context, delivery_profile,
+            subtitle_output
         )
         if audio_file is None:
             return None
@@ -471,6 +557,7 @@ def main():
     parser.add_argument('--speed', type=float, help='语速（MiniMax/Kokoro: 如 1.0）')
     parser.add_argument('--context', help='MiniMax 专属语境档；不影响 Edge/Kokoro，默认按文本自动识别')
     parser.add_argument('--delivery-profile', help='MiniMax 整期表达档；启用后所有句子固定语速、音量和音调')
+    parser.add_argument('--subtitle-output', help='MiniMax 专属：保存经过校验的词级时间戳 JSON')
     parser.add_argument('--post-process', action='store_true', help='启用后处理（voice-changer）')
     parser.add_argument('--list-voices', action='store_true', help='列出所有可用的声音')
 
@@ -514,6 +601,7 @@ def main():
         args.speed,
         args.context,
         args.delivery_profile,
+        args.subtitle_output,
     ))
     sys.exit(0 if result else 1)
 

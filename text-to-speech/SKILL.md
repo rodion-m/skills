@@ -1,8 +1,9 @@
 ---
 name: text-to-speech
 description: 文本转语音工具 - 默认 MiniMax TTS，支持切换 Edge TTS 和 Kokoro TTS (v1.1-zh)
-version: 3.4.0
+version: 3.5.0
 changelog:
+  - 2026-08-01: v3.5.0 新增 MiniMax 词级时间戳 sidecar；只保存校验后的时间段，不保存短期签名下载 URL；Edge/Kokoro 显式拒绝该参数
   - 2026-08-01: v3.4.0 新增 MiniMax 声音克隆上传/创建/激活费用门禁、本机 0600 克隆音色档，以及整期固定 commercial_narration 表达档；克隆音色或表达档变化会使下游缓存失效
   - 2026-07-18: v3.3.1 MiniMax 语境适配移除逐 beat emotion 注入，避免同一场景语气跳变；保留 speed/volume/pitch 轻量调整并同步测试文档
   - 2026-07-18: v3.3.0 MiniMax 默认音色改为 Chinese (Mandarin)_Reliable_Executive；新增 MiniMax 专属语境适配层，按开场、总结、解释、步骤、提醒、资源、结论和关注引导自动微调表达；Edge/Kokoro 行为不变
@@ -44,6 +45,10 @@ python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py script.txt -v 
 # 指定输出文件
 python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py script.txt -o output.mp3
 
+# MiniMax 专属：同时保存经过校验的词级时间戳
+python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py script.txt \
+  -o output.mp3 --subtitle-output output.subtitles.json
+
 # 调整语速（MiniMax/Kokoro）
 python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py script.txt --speed 1.2
 
@@ -60,6 +65,10 @@ python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py --list-voices
 - 音色：`Chinese (Mandarin)_Reliable_Executive`（可靠高管）
 - 语速：`1.0`
 - 输出：MP3
+
+### MiniMax 词级时间戳
+
+`--subtitle-output <path>` 会为 MiniMax 请求启用词级时间戳，下载官方 sidecar 后校验文本、字符范围和时间单调性，再写入本地 JSON。sidecar 只保留 `provider/model/voice/subtitle_type/segments`，不会记录官方返回的短期签名 URL。该参数属于 MiniMax 专属能力；Edge/Kokoro 会失败关闭，避免下游误把估算时间当成官方时间戳。
 
 ### 整期表达一致性（默认）
 
