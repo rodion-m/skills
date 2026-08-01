@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.6.0 - 2026-08-01
+
+- 新增并默认启用 `friendly_tutorial` 整期表达档，定位为面向普通大众的免费教程口播。
+- 固定 speed `1.0`、volume `1.0`、pitch `0`，用自然正文而非逐句动态参数实现口语感。
+- 保留 `commercial_narration`，供公告、品牌声明等确需正式表达的内容显式选择。
+- MiniMax 克隆激活试听默认同步使用 `friendly_tutorial`。
+
 ## v3.5.0 - 2026-08-01
 
 - 新增 MiniMax `--subtitle-output`，请求官方词级时间戳并下载 sidecar。

@@ -243,14 +243,21 @@ class MiniMaxContextTests(unittest.TestCase):
         tts = make_tts()
         tts.config["minimax_tts"]["delivery_consistency"] = {
             "enabled": True,
-            "default_profile": "commercial_narration",
+            "default_profile": "friendly_tutorial",
             "profiles": {
-                "commercial_narration": {"speed": 0.96, "volume": 1.0, "pitch": 0}
+                "friendly_tutorial": {"speed": 1.0, "volume": 1.0, "pitch": 0}
             },
         }
         name, settings = tts._resolve_delivery_profile()
-        self.assertEqual(name, "commercial_narration")
-        self.assertEqual(settings, {"speed": 0.96, "volume": 1.0, "pitch": 0})
+        self.assertEqual(name, "friendly_tutorial")
+        self.assertEqual(settings, {"speed": 1.0, "volume": 1.0, "pitch": 0})
+
+    def test_repository_default_is_mass_audience_friendly_tutorial(self):
+        tts = MODULE.TextToSpeech()
+        name, settings = tts._resolve_delivery_profile()
+        self.assertEqual(name, "friendly_tutorial")
+        self.assertEqual(settings, {"speed": 1.0, "volume": 1.0, "pitch": 0,
+                                    "description": "面向普通大众的免费教程固定表达：像真人耐心讲解，口语自然，不端着，不逐句变调"})
 
     def test_active_local_clone_precedes_repository_default(self):
         tts = make_tts()

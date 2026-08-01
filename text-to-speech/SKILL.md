@@ -1,8 +1,9 @@
 ---
 name: text-to-speech
 description: 文本转语音工具 - 默认 MiniMax TTS，支持切换 Edge TTS 和 Kokoro TTS (v1.1-zh)
-version: 3.5.0
+version: 3.6.0
 changelog:
+  - 2026-08-01: v3.6.0 新增并默认启用 friendly_tutorial 整期表达档，面向普通大众的免费教程保持正常语速、自然口语和固定声线
   - 2026-08-01: v3.5.0 新增 MiniMax 词级时间戳 sidecar；只保存校验后的时间段，不保存短期签名下载 URL；Edge/Kokoro 显式拒绝该参数
   - 2026-08-01: v3.4.0 新增 MiniMax 声音克隆上传/创建/激活费用门禁、本机 0600 克隆音色档，以及整期固定 commercial_narration 表达档；克隆音色或表达档变化会使下游缓存失效
   - 2026-07-18: v3.3.1 MiniMax 语境适配移除逐 beat emotion 注入，避免同一场景语气跳变；保留 speed/volume/pitch 轻量调整并同步测试文档
@@ -72,10 +73,11 @@ python3 ~/.claude/skills/text-to-speech/scripts/text_to_speech.py --list-voices
 
 ### 整期表达一致性（默认）
 
-`minimax_tts.delivery_consistency` 默认启用 `commercial_narration`。同一期视频内所有句子固定使用相同的音色、速度、音量和音调，不再按每句话的关键词切换表达参数。这样保留真人音色和自然标点韵律，同时避免逐 beat 的语速、声调和情绪跳变。
+`minimax_tts.delivery_consistency` 默认启用 `friendly_tutorial`。它用于面向普通大众的免费教程：像真人耐心讲解，允许正文自然使用“好、其实、这里呢、别急”等连接词，但不靠逐句变调制造表演感。同一期视频内所有句子固定使用相同的音色、速度、音量和音调，避免逐 beat 割裂。
 
-- 默认档：`commercial_narration`，speed `0.96`、volume `1.0`、pitch `0`
-- 显式选择：`--delivery-profile commercial_narration`
+- 默认档：`friendly_tutorial`，speed `1.0`、volume `1.0`、pitch `0`
+- 显式选择：`--delivery-profile friendly_tutorial`
+- 保留档：`commercial_narration`，仅用于公告、品牌声明等确需正式表达的内容
 - 克隆音色选择顺序：`--voice` > `MINIMAX_VOICE_ID` > 已激活的本机克隆档 > 仓库系统音色
 - 本机档：`~/.config/duanku/minimax-voice.json`，必须为 `0600`，不提交仓库
 

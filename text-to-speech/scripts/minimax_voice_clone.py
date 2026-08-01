@@ -270,7 +270,7 @@ def parser() -> argparse.ArgumentParser:
     activate.add_argument("--text", required=True)
     activate.add_argument("--output", type=Path, required=True)
     activate.add_argument("--model", default="speech-2.8-hd")
-    activate.add_argument("--delivery-profile", default="commercial_narration")
+    activate.add_argument("--delivery-profile", default="friendly_tutorial")
     activate.add_argument("--confirm-quote-id")
     activate.add_argument("--confirm-amount-usd")
     return result

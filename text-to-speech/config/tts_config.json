@@ -12,8 +12,14 @@
     "pitch": 0,
     "delivery_consistency": {
       "enabled": true,
-      "default_profile": "commercial_narration",
+      "default_profile": "friendly_tutorial",
       "profiles": {
+        "friendly_tutorial": {
+          "speed": 1.0,
+          "volume": 1.0,
+          "pitch": 0,
+          "description": "面向普通大众的免费教程固定表达：像真人耐心讲解，口语自然，不端着，不逐句变调"
+        },
         "commercial_narration": {
           "speed": 0.96,
           "volume": 1.0,

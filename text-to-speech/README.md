@@ -1,7 +1,7 @@
 # text-to-speech
 
 > 仓库地址: https://github.com/wlzh/skills
-> 版本: v3.5.0
+> 版本: v3.6.0
 
 文本转语音工具 - 默认 MiniMax TTS，支持切换 Kokoro TTS 和 Edge TTS，保留播客脚本解析、情绪标记和后处理。
 
@@ -99,7 +99,7 @@ usage: text_to_speech.py [-h] [-o OUTPUT] [-c CONFIG] [-v VOICE]
   --volume             音量调整（Edge 或 MiniMax）
   --speed              语速（MiniMax/Kokoro，如 1.0）
   --context            MiniMax 专属语境档；默认自动识别，Edge/Kokoro 忽略
-  --delivery-profile   MiniMax 整期表达档；默认 commercial_narration
+  --delivery-profile   MiniMax 整期表达档；默认 friendly_tutorial
   --subtitle-output    MiniMax 专属：保存经过校验的词级时间戳 JSON
   --post-process       启用后处理（voice-changer）
   --list-voices        列出所有可用的声音
