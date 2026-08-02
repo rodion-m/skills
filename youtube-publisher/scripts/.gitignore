@@ -18,3 +18,9 @@ Thumbs.db
 # Build
 dist/
 *.js.map
+
+# One-off debug/repair scripts with hardcoded VIDEO_IDs (not reusable)
+delete-duplicates.ts
+fix-thumb.ts
+fix-video.ts
+upload-thumb-only.ts

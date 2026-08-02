@@ -1,6 +1,10 @@
 # Changelog — youtube-publisher
 
-Current version: `1.6.2`
+Current version: `1.6.3`
+
+## v1.6.3 (2026-08-02)
+
+- **youtube-update-description.ts v1.5**: Better error diagnostics for transient proxy failures. `isNetwork` now catches empty/blank error messages (proxy drops with "Error: \n"), logs full error stack and HTTP status when available, and matches proxy EOF / `ECONNRESET` / `ETIMEDOUT` / `EPIPE` by error code in addition to message string.
 
 ## v1.6.2 (2026-07-28)
 

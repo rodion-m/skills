@@ -1,3 +1,8 @@
+# v4.8.3 - 2026-08-02
+
+- 新增 `--no-deploy` 命令行参数：抑制 `~/.youtube-blog-config.json` 中 `auto_deploy: True` 的自动 git push 行为。
+- 供 duanku-youtube-publish-blog-pipeline v2.44.0 调用时使用，确保 deploy 由 pipeline 统一管理，避免脏 keywords 在 BLOG-CLEAN 前被推送到远程。
+
 # v4.8.2 - 2026-07-28
 
 - 对齐博客站点 v2.3.2：每个观看页只允许一个完整的 JSON-LD VideoObject。

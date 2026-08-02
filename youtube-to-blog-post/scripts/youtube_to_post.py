@@ -1309,6 +1309,7 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='Generate content but don\'t save')
     parser.add_argument('--no-humanizer', action='store_true', help='Skip AI writing removal (humanizer)')
     parser.add_argument('--deploy', action='store_true', help='Auto deploy to git after saving post')
+    parser.add_argument('--no-deploy', action='store_true', help='Suppress auto-deploy even if config auto_deploy=True (for pipeline use)')
     # Prefill arguments: when provided, skip YouTube fetch via yt-dlp
     parser.add_argument('--prefill-title', help='Pre-filled video title (skip YouTube fetch)')
     parser.add_argument('--prefill-description', help='Pre-filled video description (skip YouTube fetch)')
@@ -1394,8 +1395,8 @@ def main():
         file_path = save_post(content, filename, posts_dir, video_info['title'], apply_humanizer)
         print(f"\n🎉 Post saved to: {file_path}")
 
-        # Auto deploy if enabled
-        if args.deploy or config.get('auto_deploy', False):
+        # Auto deploy if enabled and not suppressed
+        if args.deploy or (config.get('auto_deploy', False) and not args.no_deploy):
             print("\n🚀 Auto-deploying to git...")
             deploy_branch = config.get('deploy_branch', 'main')
             deploy_to_git(blog_dir, deploy_branch)

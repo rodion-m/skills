@@ -1,10 +1,10 @@
 ---
 name: youtube-publisher
 description: "Upload and publish videos to YouTube with title, description, tags, thumbnail and subtitles. Use for: youtube upload, publish video, share on youtube."
-version: 1.6.0
+version: 1.6.3
 setup_complete: true
 setup: "./SETUP.md"
-changelog: "v1.6.0: Add a parameterized, validated thumbnail-only recovery command and remove unsafe hardcoded repair actions. Full history: references/CHANGELOG.md."
+changelog: "v1.6.3: youtube-update-description.ts v1.5 — transient proxy error diagnostics. v1.6.2: thumbnail 2MB limit check. v1.6.1: P0D guard. v1.6.0: parameterized thumbnail-only recovery. Full history: references/CHANGELOG.md."
 ---
 
 ## 🔴 Strict Execution Rule (Highest Priority)

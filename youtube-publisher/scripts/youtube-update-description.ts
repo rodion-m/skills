@@ -3,6 +3,10 @@
  * post-write verification and robust token refresh.
  *
  * Changelog:
+ *  v1.5  2026-08-02  Better error diagnostics for transient proxy failures
+ *    - Catch empty/blank error messages (proxy drops with "Error: \n")
+ *    - Log full error stack and HTTP status when available
+ *    - Expand isNetwork to include proxy EOF and empty-message patterns
  *  v1.4  2026-06-27  Network error retry for API calls
  *    - Wrap videos.list and videos.update in retry-with-backoff (3 attempts,
  *      5s delay) to handle transient "Premature close" / ECONNRESET errors.
@@ -50,7 +54,12 @@ async function withNetworkRetry<T>(
         err.message?.includes("ECONNRESET") ||
         err.message?.includes("ETIMEDOUT") ||
         err.message?.includes("EPIPE") ||
-        err.message?.includes("socket hang up");
+        err.message?.includes("socket hang up") ||
+        // v1.5: proxy drops often produce empty or whitespace-only messages
+        !err.message?.trim() ||
+        err.code === "ECONNRESET" ||
+        err.code === "ETIMEDOUT" ||
+        err.code === "EPIPE";
       if (isNetwork && attempt < MAX_NETWORK_RETRIES) {
         console.error(
           `${label} network error (attempt ${attempt}/${MAX_NETWORK_RETRIES}): ${err.message}`
@@ -198,6 +207,12 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Error:", err.message);
+  // v1.5: Log full error details for debugging transient proxy failures
+  const msg = err?.message?.trim() || "(empty error message — likely proxy drop)";
+  const stack = err?.stack || "";
+  const code = err?.code || "";
+  console.error(`Error: ${msg}`);
+  if (code) console.error(`Error code: ${code}`);
+  if (stack && stack !== msg) console.error(`Stack: ${stack}`);
   process.exit(1);
 });
