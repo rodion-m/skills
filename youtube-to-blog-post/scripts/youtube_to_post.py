@@ -639,12 +639,26 @@ def generate_seo_description(title, description):
         # Prefer the most keyword-rich sentence, not simply the first sentence.
         candidates = []
         sentences = re.split(r'[。！？.!?]', desc)
+        # v4.6.2 (2026-08-16 blackwhale case): YouTube descriptions contain
+        # "本期拆解：" bullet lists ("- Composio实测：…" lines joined without
+        # sentence-ending punctuation). Splitting only on 。！？.!? keeps the
+        # whole bullet block as ONE "sentence" whose interior retains "- "
+        # list markers — the blog SEO audit (seo-audit.js) then rejects the
+        # post with "description contains transcript or Markdown artifacts"
+        # AFTER generation, blocking deploy. Reject markdown-contaminated
+        # candidates here instead, and additionally split on bullet markers
+        # so individual bullets can still become valid candidates.
         for sentence in sentences:
-            sentence = sentence.strip(' -，,；;：:')
-            if len(sentence) < 20 or len(sentence) > MAX_DESCRIPTION_LENGTH:
-                continue
-            score = score_seo_sentence(sentence, title_terms)
-            candidates.append((score, len(sentence), sentence))
+            # Break " - item one - item two" runs into separate candidates
+            for piece in re.split(r'\s[-•]\s', sentence):
+                sentence = piece.strip(' -，,；;：:')
+                if len(sentence) < 20 or len(sentence) > MAX_DESCRIPTION_LENGTH:
+                    continue
+                # Skip candidates carrying residual markdown artifacts
+                if re.search(r'[*`]|#{1,6}\s|(^|\s)[#>]\s|(^|\s)\d+\.\s', sentence):
+                    continue
+                score = score_seo_sentence(sentence, title_terms)
+                candidates.append((score, len(sentence), sentence))
 
         candidates = [item for item in candidates if item[0] > 0]
         if candidates:
