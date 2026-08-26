@@ -1,6 +1,17 @@
 # Changelog — youtube-publisher
 
-Current version: `1.6.3`
+Current version: `1.6.4`
+
+## v1.6.4 (2026-08-26)
+
+- Fix `upload-captions.ts` captions.insert failing with HTTP 400 `invalidMetadata`.
+- Root cause: the script passed `mimeType: "text/vtt"` in `media` and a
+  `Content-Type: application/octet-stream` header override on the request.
+  googleapis builds the `multipart/related` body and computes its own boundary;
+  overriding the header corrupts metadata parsing, so the API saw garbage
+  snippet values. Also added `isDraft: false` to match the working call site
+  in `youtube-upload.ts`.
+- Verified live: caption upload succeeds immediately after removing both.
 
 ## v1.6.3 (2026-08-02)
 

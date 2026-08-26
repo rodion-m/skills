@@ -62,14 +62,19 @@ async function main() {
           videoId: options.videoId,
           language: options.language,
           name: options.name,
+          // isDraft: false is required — without it the API rejects with
+          // invalidMetadata (matches youtube-upload.ts working call site)
+          isDraft: false,
         },
       },
       media: {
         body: fs.createReadStream(options.captionFile),
-        mimeType: "text/vtt",
       },
-    },
-    { headers: { "Content-Type": "application/octet-stream" } }
+      // NOTE: do NOT set mimeType or a Content-Type header override here.
+      // googleapis builds a multipart body and computes its own boundary;
+      // overriding the header corrupts metadata parsing → invalidMetadata.
+      // This matches the working captions.insert call in youtube-upload.ts.
+    }
   );
 
   console.log("Caption uploaded: " + result.data.id);
