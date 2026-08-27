@@ -6,6 +6,8 @@ Current version: `1.7.0`
 
 - Added full Live broadcast and encoder-stream lifecycle commands.
 - Added dry-run previews, explicit confirmations, stream-key redaction, and transition preflights.
+- Added shared-stream conflict detection; deliberate reuse now requires `--allow-shared-stream`.
+- Added previous-broadcast setting inspection and safe nonstandard-setting inheritance.
 - Added OAuth `state` validation, loopback-only callback binding, and `0600` token permissions.
 - Removed automatic deletion of metadata-only upload shells; cleanup is now explicit.
 - Updated `googleapis` to a patched dependency line.

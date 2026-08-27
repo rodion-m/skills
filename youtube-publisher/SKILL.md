@@ -31,8 +31,15 @@ YouTube Live broadcasts and encoder streams. Mutating commands support `--dry-ru
 destructive deletion, live/completed transitions, and stream-key disclosure require
 explicit `--yes`. Stream keys are redacted from ordinary output.
 
+The safe default is one dedicated named encoder stream per independent show/event.
+Intentional reuse across active or upcoming broadcasts requires `--allow-shared-stream`.
+
 Read [references/live-streaming.md](references/live-streaming.md) before operating a live
 event. Scheduled timestamps must include an explicit timezone (`Z` or `±HH:MM`).
+
+Creation reads the most recent completed broadcast and inherits only its nonstandard Live
+settings unless the user explicitly overrides them. Dry-run reports the source and applied
+options; `--no-inherit-previous` opts out.
 
 ## Metadata sanitization
 

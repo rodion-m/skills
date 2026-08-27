@@ -66,6 +66,17 @@ The CLI refuses to transition to `testing` or `live` unless the broadcast is bou
 stream reports `active`. Transitions to `live` or `complete` require `--yes`. Do not use a
 transition merely to test the API without an active encoder.
 
+By default, creation and binding reject an encoder stream already attached to another
+`created`, `ready`, `testing`, or `live` broadcast. Although YouTube officially permits a
+reusable stream to serve multiple broadcasts, dedicated named streams avoid Live Control
+Room assignment conflicts and accidental `autoStart` routing. For a deliberate
+single-encoder recurring workflow, opt in with `--allow-shared-stream`.
+
+Before creation, the CLI reads the most recent completed broadcast and compares latency,
+auto-start/stop, DVR, embedding, recording, monitor-stream, and delay settings with safe
+defaults. Only nonstandard values are inherited, and explicit options win. Dry-run output
+identifies the source broadcast and inherited options. Pass `--no-inherit-previous` to opt out.
+
 ## Encoder streams
 
 ```bash

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseLiveCommand } from "../youtube-live-cli";
-import { mergeLiveBroadcastUpdate, redactStreamKey } from "../youtube-live";
+import { findStreamBindingConflicts, inheritNonstandardBroadcastSettings, mergeLiveBroadcastUpdate, redactStreamKey } from "../youtube-live";
 
 test("broadcast creation defaults to private and emits safe production defaults", () => {
   const future = new Date(Date.now() + 86_400_000).toISOString();
@@ -86,13 +86,14 @@ test("broadcast update preserves untouched fields in each overwritten part", () 
     },
   };
 
-  const update = mergeLiveBroadcastUpdate(current, { title: "New title", enableAutoStop: true });
+  const update = mergeLiveBroadcastUpdate(current, { title: "New title", enableAutoStop: true, latencyPreference: "normal" });
 
   assert.deepEqual(update.parts, ["snippet", "contentDetails"]);
   assert.equal(update.resource.snippet?.description, "Keep description");
   assert.equal(update.resource.snippet?.scheduledStartTime, "2030-01-01T10:00:00Z");
   assert.equal(update.resource.contentDetails?.enableDvr, true);
   assert.equal(update.resource.contentDetails?.enableAutoStop, true);
+  assert.equal(update.resource.contentDetails?.latencyPreference, "normal");
   assert.equal(update.resource.status, undefined);
 });
 
@@ -111,4 +112,21 @@ test("ordinary stream output redacts the ingestion key without mutating the sour
   const redacted = redactStreamKey(source);
   assert.equal(redacted.cdn?.ingestionInfo?.streamName, "[redacted]");
   assert.equal(source.cdn.ingestionInfo.streamName, "secret-key");
+});
+
+test("stream binding conflicts include only other active or upcoming broadcasts", () => {
+  const broadcasts = [
+    { id: "current", status: { lifeCycleStatus: "ready" }, contentDetails: { boundStreamId: "stream-1" } },
+    { id: "other", snippet: { title: "Other show" }, status: { lifeCycleStatus: "ready" }, contentDetails: { boundStreamId: "stream-1" } },
+    { id: "done", status: { lifeCycleStatus: "complete" }, contentDetails: { boundStreamId: "stream-1" } },
+    { id: "different", status: { lifeCycleStatus: "ready" }, contentDetails: { boundStreamId: "stream-2" } },
+  ];
+  assert.deepEqual(findStreamBindingConflicts(broadcasts, "stream-1", "current").map((item) => item.id), ["other"]);
+});
+
+test("previous broadcast inheritance applies only nonstandard non-explicit settings", () => {
+  const previous = { contentDetails: { latencyPreference: "low", enableAutoStart: true, enableAutoStop: false, enableDvr: true, enableEmbed: true, recordFromStart: true, monitorStream: { enableMonitorStream: false, broadcastStreamDelayMs: 0 } } };
+  const result = inheritNonstandardBroadcastSettings(previous, ["--auto-start"]);
+  assert.deepEqual(result.settings, { latencyPreference: "low", enableMonitorStream: false });
+  assert.deepEqual(result.applied, ["--latency", "--monitor-stream"]);
 });

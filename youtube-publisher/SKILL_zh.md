@@ -9,6 +9,7 @@
 使用 `youtube-live.ts` 创建、查询、更新、绑定、切换状态和删除直播活动与编码器推流。
 所有修改操作应先使用 `--dry-run` 预览；删除、切换为直播/结束状态，以及显示推流密钥时必须显式传入 `--yes`。
 普通输出会自动隐藏推流密钥。完整命令和安全规则见 [references/live-streaming.md](references/live-streaming.md)。
+默认情况下，每个独立节目或活动使用单独命名的编码器推流；如需在多个活动间有意复用，必须传入 `--allow-shared-stream`。
 
 ## 元数据清洗规则
 

@@ -20,6 +20,7 @@ export interface BroadcastPatch {
   recordFromStart?: boolean;
   enableMonitorStream?: boolean;
   broadcastStreamDelayMs?: number;
+  latencyPreference?: LatencyPreference;
 }
 export type LiveCommand =
   | { kind: "live-broadcasts-list"; status: BroadcastFilter; json: boolean }
@@ -43,11 +44,14 @@ export type LiveCommand =
       enableMonitorStream: boolean;
       broadcastStreamDelayMs: number;
       streamId?: string;
+      allowSharedStream: boolean;
+      inheritPrevious: boolean;
+      explicitOptions: string[];
       thumbnail?: string;
       dryRun: boolean;
     }
   | { kind: "live-broadcast-update"; broadcastId: string; patch: BroadcastPatch; descriptionFile?: string; dryRun: boolean }
-  | { kind: "live-broadcast-bind"; broadcastId: string; streamId?: string; unbind: boolean; dryRun: boolean }
+  | { kind: "live-broadcast-bind"; broadcastId: string; streamId?: string; unbind: boolean; allowSharedStream: boolean; dryRun: boolean }
   | { kind: "live-broadcast-transition"; broadcastId: string; status: TransitionStatus; confirmed: boolean; dryRun: boolean }
   | { kind: "live-broadcast-delete"; broadcastId: string; confirmed: boolean; dryRun: boolean }
   | { kind: "live-streams-list"; json: boolean }
@@ -69,7 +73,7 @@ export type LiveCommand =
   | { kind: "live-stream-update"; streamId: string; title?: string; description?: string; descriptionFile?: string; dryRun: boolean }
   | { kind: "live-stream-delete"; streamId: string; confirmed: boolean; dryRun: boolean };
 
-const BOOLEAN_FLAGS = new Set(["--dry-run", "--json", "--yes", "--unbind", "--reveal-key"]);
+const BOOLEAN_FLAGS = new Set(["--dry-run", "--json", "--yes", "--unbind", "--reveal-key", "--allow-shared-stream", "--no-inherit-previous"]);
 
 class Flags {
   private readonly values = new Map<string, string | true>();
@@ -161,7 +165,7 @@ export function parseLiveCommand(args: string[]): LiveCommand {
         "--title", "--description", "--description-file", "--scheduled-start", "--scheduled-end",
         "--privacy", "--category", "--made-for-kids", "--latency", "--auto-start", "--auto-stop",
         "--dvr", "--embeddable", "--record-from-start", "--monitor-stream", "--delay-ms", "--stream-id",
-        "--thumbnail", "--dry-run",
+        "--thumbnail", "--allow-shared-stream", "--no-inherit-previous", "--dry-run",
       ]);
       if (flags.has("--description") && flags.has("--description-file")) throw new Error("Use either --description or --description-file, not both");
       const scheduledStartTime = isoDate(flags.required("--scheduled-start"), "--scheduled-start");
@@ -187,6 +191,9 @@ export function parseLiveCommand(args: string[]): LiveCommand {
         enableMonitorStream: bool(flags.optional("--monitor-stream"), "--monitor-stream", true),
         broadcastStreamDelayMs: integer(flags.optional("--delay-ms"), "--delay-ms", 0),
         streamId: flags.optional("--stream-id"),
+        allowSharedStream: flags.has("--allow-shared-stream"),
+        inheritPrevious: !flags.has("--no-inherit-previous"),
+        explicitOptions: ["--latency", "--auto-start", "--auto-stop", "--dvr", "--embeddable", "--record-from-start", "--monitor-stream", "--delay-ms"].filter((name) => flags.has(name)),
         thumbnail: flags.optional("--thumbnail"),
         dryRun: flags.has("--dry-run"),
       };
@@ -195,7 +202,7 @@ export function parseLiveCommand(args: string[]): LiveCommand {
       flags.assertOnly([
         "--broadcast-id", "--title", "--description", "--description-file", "--category", "--scheduled-start",
         "--scheduled-end", "--privacy", "--auto-start", "--auto-stop", "--dvr", "--embeddable",
-        "--record-from-start", "--monitor-stream", "--delay-ms", "--dry-run",
+        "--record-from-start", "--monitor-stream", "--delay-ms", "--latency", "--dry-run",
       ]);
       if (flags.has("--description") && flags.has("--description-file")) throw new Error("Use either --description or --description-file, not both");
       const patch: BroadcastPatch = {};
@@ -214,14 +221,15 @@ export function parseLiveCommand(args: string[]): LiveCommand {
         if (value !== undefined) (patch as Record<string, unknown>)[property] = bool(value, option);
       }
       if (flags.optional("--delay-ms") !== undefined) patch.broadcastStreamDelayMs = integer(flags.optional("--delay-ms"), "--delay-ms");
+      if (flags.optional("--latency") !== undefined) patch.latencyPreference = choice<LatencyPreference>(flags.optional("--latency"), "--latency", ["normal", "low", "ultraLow"]);
       const descriptionFile = flags.optional("--description-file");
       if (Object.keys(patch).length === 0 && !descriptionFile) throw new Error("Live broadcast update requires at least one editable field");
       return { kind, broadcastId: flags.required("--broadcast-id"), patch, descriptionFile, dryRun: flags.has("--dry-run") };
     }
     case "live-broadcast-bind":
-      flags.assertOnly(["--broadcast-id", "--stream-id", "--unbind", "--dry-run"]);
+      flags.assertOnly(["--broadcast-id", "--stream-id", "--unbind", "--allow-shared-stream", "--dry-run"]);
       if (flags.has("--unbind") === (flags.optional("--stream-id") !== undefined)) throw new Error("Specify exactly one of --stream-id or --unbind");
-      return { kind, broadcastId: flags.required("--broadcast-id"), streamId: flags.optional("--stream-id"), unbind: flags.has("--unbind"), dryRun: flags.has("--dry-run") };
+      return { kind, broadcastId: flags.required("--broadcast-id"), streamId: flags.optional("--stream-id"), unbind: flags.has("--unbind"), allowSharedStream: flags.has("--allow-shared-stream"), dryRun: flags.has("--dry-run") };
     case "live-broadcast-transition":
       flags.assertOnly(["--broadcast-id", "--status", "--yes", "--dry-run"]);
       return { kind, broadcastId: flags.required("--broadcast-id"), status: choice(flags.optional("--status"), "--status", ["testing", "live", "complete"]), confirmed: flags.has("--yes"), dryRun: flags.has("--dry-run") };

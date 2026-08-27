@@ -61,7 +61,51 @@ function summarizeStream(item: youtube_v3.Schema$LiveStream): object {
   };
 }
 
-function broadcastCreateResource(command: Extract<LiveCommand, { kind: "live-broadcast-create" }>, description: string): youtube_v3.Schema$LiveBroadcast {
+export function findStreamBindingConflicts(
+  broadcasts: youtube_v3.Schema$LiveBroadcast[], streamId: string, excludeBroadcastId?: string,
+): youtube_v3.Schema$LiveBroadcast[] {
+  const relevantStates = new Set(["created", "ready", "testing", "live"]);
+  return broadcasts.filter((broadcast) => broadcast.id !== excludeBroadcastId
+    && broadcast.contentDetails?.boundStreamId === streamId
+    && relevantStates.has(broadcast.status?.lifeCycleStatus ?? ""));
+}
+
+async function assertStreamBindingAvailable(
+  service: YouTubeLiveService, streamId: string, excludeBroadcastId: string | undefined, allowSharedStream: boolean,
+): Promise<void> {
+  if (allowSharedStream) return;
+  const conflicts = findStreamBindingConflicts(await service.listLiveBroadcasts("all"), streamId, excludeBroadcastId);
+  if (conflicts.length === 0) return;
+  const details = conflicts.map((item) => `${item.id} (${item.snippet?.title ?? "untitled"})`).join(", ");
+  throw new Error(`Stream ${streamId} is already assigned to active/upcoming broadcast(s): ${details}. `
+    + "Use a dedicated stream, or pass --allow-shared-stream for a deliberate single-encoder workflow.");
+}
+
+type InheritableBroadcastSettings = Pick<BroadcastPatch, "latencyPreference" | "enableAutoStart" | "enableAutoStop" | "enableDvr" | "enableEmbed" | "recordFromStart" | "enableMonitorStream" | "broadcastStreamDelayMs">;
+const SAFE_BROADCAST_DEFAULTS: Required<InheritableBroadcastSettings> = { latencyPreference: "normal", enableAutoStart: false, enableAutoStop: false, enableDvr: true, enableEmbed: true, recordFromStart: true, enableMonitorStream: true, broadcastStreamDelayMs: 0 };
+
+export function inheritNonstandardBroadcastSettings(previous: youtube_v3.Schema$LiveBroadcast | undefined, explicitOptions: string[]): { settings: InheritableBroadcastSettings; applied: string[] } {
+  if (!previous) return { settings: {}, applied: [] };
+  const candidates: Array<[keyof InheritableBroadcastSettings, string, unknown]> = [
+    ["latencyPreference", "--latency", previous.contentDetails?.latencyPreference], ["enableAutoStart", "--auto-start", previous.contentDetails?.enableAutoStart],
+    ["enableAutoStop", "--auto-stop", previous.contentDetails?.enableAutoStop], ["enableDvr", "--dvr", previous.contentDetails?.enableDvr],
+    ["enableEmbed", "--embeddable", previous.contentDetails?.enableEmbed], ["recordFromStart", "--record-from-start", previous.contentDetails?.recordFromStart],
+    ["enableMonitorStream", "--monitor-stream", previous.contentDetails?.monitorStream?.enableMonitorStream], ["broadcastStreamDelayMs", "--delay-ms", previous.contentDetails?.monitorStream?.broadcastStreamDelayMs],
+  ];
+  const settings: InheritableBroadcastSettings = {}; const applied: string[] = [];
+  for (const [property, option, value] of candidates) {
+    if (value === undefined || explicitOptions.includes(option) || value === SAFE_BROADCAST_DEFAULTS[property]) continue;
+    (settings as Record<string, unknown>)[property] = value; applied.push(option);
+  }
+  return { settings, applied };
+}
+
+function mostRecentCompletedBroadcast(items: youtube_v3.Schema$LiveBroadcast[]): youtube_v3.Schema$LiveBroadcast | undefined {
+  const stamp = (item: youtube_v3.Schema$LiveBroadcast) => Date.parse(item.snippet?.actualEndTime ?? item.snippet?.scheduledStartTime ?? item.snippet?.publishedAt ?? "") || 0;
+  return [...items].sort((left, right) => stamp(right) - stamp(left))[0];
+}
+
+function broadcastCreateResource(command: Extract<LiveCommand, { kind: "live-broadcast-create" }>, description: string, inherited: InheritableBroadcastSettings = {}): youtube_v3.Schema$LiveBroadcast {
   validateBroadcastText(command.title, description);
   return {
     snippet: {
@@ -76,15 +120,15 @@ function broadcastCreateResource(command: Extract<LiveCommand, { kind: "live-bro
       selfDeclaredMadeForKids: command.selfDeclaredMadeForKids,
     },
     contentDetails: {
-      latencyPreference: command.latencyPreference,
-      enableAutoStart: command.enableAutoStart,
-      enableAutoStop: command.enableAutoStop,
-      enableDvr: command.enableDvr,
-      enableEmbed: command.enableEmbed,
-      recordFromStart: command.recordFromStart,
+      latencyPreference: inherited.latencyPreference ?? command.latencyPreference,
+      enableAutoStart: inherited.enableAutoStart ?? command.enableAutoStart,
+      enableAutoStop: inherited.enableAutoStop ?? command.enableAutoStop,
+      enableDvr: inherited.enableDvr ?? command.enableDvr,
+      enableEmbed: inherited.enableEmbed ?? command.enableEmbed,
+      recordFromStart: inherited.recordFromStart ?? command.recordFromStart,
       monitorStream: {
-        enableMonitorStream: command.enableMonitorStream,
-        broadcastStreamDelayMs: command.broadcastStreamDelayMs,
+        enableMonitorStream: inherited.enableMonitorStream ?? command.enableMonitorStream,
+        broadcastStreamDelayMs: inherited.broadcastStreamDelayMs ?? command.broadcastStreamDelayMs,
       },
     },
   };
@@ -117,7 +161,7 @@ export function mergeLiveBroadcastUpdate(current: youtube_v3.Schema$LiveBroadcas
     parts.push("status");
   }
   const contentKeys: Array<keyof BroadcastPatch> = [
-    "enableAutoStart", "enableAutoStop", "enableDvr", "enableEmbed", "recordFromStart", "enableMonitorStream", "broadcastStreamDelayMs",
+    "enableAutoStart", "enableAutoStop", "enableDvr", "enableEmbed", "recordFromStart", "enableMonitorStream", "broadcastStreamDelayMs", "latencyPreference",
   ];
   if (contentKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
     resource.contentDetails = {
@@ -126,6 +170,7 @@ export function mergeLiveBroadcastUpdate(current: youtube_v3.Schema$LiveBroadcas
       enableDvr: patch.enableDvr ?? current.contentDetails?.enableDvr,
       enableEmbed: patch.enableEmbed ?? current.contentDetails?.enableEmbed,
       recordFromStart: patch.recordFromStart ?? current.contentDetails?.recordFromStart,
+      latencyPreference: patch.latencyPreference ?? current.contentDetails?.latencyPreference,
       monitorStream: {
         enableMonitorStream: patch.enableMonitorStream ?? current.contentDetails?.monitorStream?.enableMonitorStream ?? true,
         broadcastStreamDelayMs: patch.broadcastStreamDelayMs ?? current.contentDetails?.monitorStream?.broadcastStreamDelayMs ?? 0,
@@ -152,13 +197,17 @@ async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-b
   }
   if (command.kind === "live-broadcast-create") {
     const description = readDescription(command.description, command.descriptionFile, 5000);
-    const resource = broadcastCreateResource(command, description);
     const thumbnail = command.thumbnail ? validateThumbnail(command.thumbnail) : undefined;
+    const service = command.inheritPrevious || !command.dryRun ? await createService() : undefined;
+    const previous = command.inheritPrevious && service ? mostRecentCompletedBroadcast(await service.listLiveBroadcasts("completed")) : undefined;
+    const inheritance = inheritNonstandardBroadcastSettings(previous, command.explicitOptions);
+    const resource = broadcastCreateResource(command, description, inheritance.settings);
     if (command.dryRun) {
-      printJson({ dryRun: true, operation: command.kind, resource, streamId: command.streamId, thumbnail });
+      printJson({ dryRun: true, operation: command.kind, resource, streamId: command.streamId, thumbnail, inheritedFromBroadcastId: previous?.id, inheritedOptions: inheritance.applied });
       return;
     }
-    const service = await createService();
+    if (!service) throw new Error("YouTube service was not initialized");
+    if (command.streamId) await assertStreamBindingAvailable(service, command.streamId, undefined, command.allowSharedStream);
     const created = await service.createLiveBroadcast(resource);
     if (!created.id) throw new Error("YouTube created a broadcast without returning an ID");
     try {
@@ -184,11 +233,15 @@ async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-b
     return;
   }
   if (command.kind === "live-broadcast-bind") {
+    const service = await createService();
+    if (!command.unbind && command.streamId) {
+      await assertStreamBindingAvailable(service, command.streamId, command.broadcastId, command.allowSharedStream);
+    }
     if (command.dryRun) {
       printJson({ dryRun: true, operation: command.kind, broadcastId: command.broadcastId, streamId: command.unbind ? null : command.streamId });
       return;
     }
-    printJson(await (await createService()).bindLiveBroadcast(command.broadcastId, command.unbind ? undefined : command.streamId));
+    printJson(await service.bindLiveBroadcast(command.broadcastId, command.unbind ? undefined : command.streamId));
     return;
   }
   if (command.kind === "live-broadcast-transition") {
