@@ -279,15 +279,10 @@ async function uploadVideo(
                   console.log(
                     `\n⚠️  Found video ${candidateId} but duration is P0D (metadata-only shell).`
                   );
-                  console.log(`   Deleting empty shell and retrying upload...`);
-                  try {
-                    await youtube.videos.delete({ id: candidateId });
-                    console.log(`   Deleted empty shell ${candidateId}.`);
-                  } catch (delErr: any) {
-                    console.log(
-                      `   Could not delete shell ${candidateId}: ${delErr.message}.`
-                    );
-                  }
+                  console.log(
+                    `   Not deleting it automatically. Review ${candidateId} in YouTube Studio, ` +
+                    `then delete it explicitly if it is safe to do so.`
+                  );
                   // Don't break — fall through to the retry (line ~292)
                 } else {
                   console.log(

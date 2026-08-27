@@ -1,6 +1,14 @@
 # Changelog — youtube-publisher
 
-Current version: `1.6.4`
+Current version: `1.7.0`
+
+## v1.7.0 (2026-08-28)
+
+- Added full Live broadcast and encoder-stream lifecycle commands.
+- Added dry-run previews, explicit confirmations, stream-key redaction, and transition preflights.
+- Added OAuth `state` validation, loopback-only callback binding, and `0600` token permissions.
+- Removed automatic deletion of metadata-only upload shells; cleanup is now explicit.
+- Updated `googleapis` to a patched dependency line.
 
 ## v1.6.4 (2026-08-26)
 
