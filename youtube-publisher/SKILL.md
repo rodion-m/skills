@@ -37,9 +37,8 @@ Intentional reuse across active or upcoming broadcasts requires `--allow-shared-
 Read [references/live-streaming.md](references/live-streaming.md) before operating a live
 event. Scheduled timestamps must include an explicit timezone (`Z` or `±HH:MM`).
 
-Creation reads the most recent completed broadcast and inherits only its nonstandard Live
-settings unless the user explicitly overrides them. Dry-run reports the source and applied
-options; `--no-inherit-previous` opts out.
+The skill passes `--inherit-previous` before creation unless the user requests a clean
+profile. The raw CLI remains deterministic and offline without that explicit flag.
 
 ## Metadata sanitization
 

@@ -73,7 +73,7 @@ export type LiveCommand =
   | { kind: "live-stream-update"; streamId: string; title?: string; description?: string; descriptionFile?: string; dryRun: boolean }
   | { kind: "live-stream-delete"; streamId: string; confirmed: boolean; dryRun: boolean };
 
-const BOOLEAN_FLAGS = new Set(["--dry-run", "--json", "--yes", "--unbind", "--reveal-key", "--allow-shared-stream", "--no-inherit-previous"]);
+const BOOLEAN_FLAGS = new Set(["--dry-run", "--json", "--yes", "--unbind", "--reveal-key", "--allow-shared-stream", "--inherit-previous"]);
 
 class Flags {
   private readonly values = new Map<string, string | true>();
@@ -165,7 +165,7 @@ export function parseLiveCommand(args: string[]): LiveCommand {
         "--title", "--description", "--description-file", "--scheduled-start", "--scheduled-end",
         "--privacy", "--category", "--made-for-kids", "--latency", "--auto-start", "--auto-stop",
         "--dvr", "--embeddable", "--record-from-start", "--monitor-stream", "--delay-ms", "--stream-id",
-        "--thumbnail", "--allow-shared-stream", "--no-inherit-previous", "--dry-run",
+        "--thumbnail", "--allow-shared-stream", "--inherit-previous", "--dry-run",
       ]);
       if (flags.has("--description") && flags.has("--description-file")) throw new Error("Use either --description or --description-file, not both");
       const scheduledStartTime = isoDate(flags.required("--scheduled-start"), "--scheduled-start");
@@ -192,7 +192,7 @@ export function parseLiveCommand(args: string[]): LiveCommand {
         broadcastStreamDelayMs: integer(flags.optional("--delay-ms"), "--delay-ms", 0),
         streamId: flags.optional("--stream-id"),
         allowSharedStream: flags.has("--allow-shared-stream"),
-        inheritPrevious: !flags.has("--no-inherit-previous"),
+        inheritPrevious: flags.has("--inherit-previous"),
         explicitOptions: ["--latency", "--auto-start", "--auto-stop", "--dvr", "--embeddable", "--record-from-start", "--monitor-stream", "--delay-ms"].filter((name) => flags.has(name)),
         thumbnail: flags.optional("--thumbnail"),
         dryRun: flags.has("--dry-run"),

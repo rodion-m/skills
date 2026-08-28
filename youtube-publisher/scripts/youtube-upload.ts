@@ -3,6 +3,13 @@ import * as fs from "fs";
 import * as path from "path";
 import { authenticate } from "./authenticate";
 
+class PersistentP0DError extends Error {
+  readonly exitCode = 42;
+  constructor(readonly videoId: string) {
+    super(`PERSISTENT_P0D_VIDEO_ID: ${videoId}`);
+  }
+}
+
 interface UploadOptions {
   video: string;
   title: string;
@@ -279,11 +286,16 @@ async function uploadVideo(
                   console.log(
                     `\n⚠️  Found video ${candidateId} but duration is P0D (metadata-only shell).`
                   );
-                  console.log(
-                    `   Not deleting it automatically. Review ${candidateId} in YouTube Studio, ` +
-                    `then delete it explicitly if it is safe to do so.`
-                  );
-                  // Don't break — fall through to the retry (line ~292)
+                  let persistent = true;
+                  for (let recheck = 1; recheck <= 2; recheck++) {
+                    await new Promise((resolve) => setTimeout(resolve, recheck * 2000));
+                    const check = await youtube.videos.list({ part: ["contentDetails"], id: [candidateId] });
+                    if (check.data.items?.[0]?.contentDetails?.duration !== "P0D") { persistent = false; break; }
+                  }
+                  if (persistent) {
+                    console.error(`PERSISTENT_P0D_VIDEO_ID: ${candidateId}`);
+                    throw new PersistentP0DError(candidateId);
+                  }
                 } else {
                   console.log(
                     `\n   Content verified — duration: ${contentDetails?.duration || "unknown"}`
@@ -296,7 +308,8 @@ async function uploadVideo(
               }
             }
           }
-        } catch {
+        } catch (recoveryError) {
+          if (recoveryError instanceof PersistentP0DError) throw recoveryError;
           // Search failed, proceed with retry
         }
         console.log(
@@ -523,5 +536,5 @@ async function main() {
 
 main().catch((err) => {
   console.error("Error:", err.message);
-  process.exit(1);
+  process.exit(err instanceof PersistentP0DError ? err.exitCode : 1);
 });

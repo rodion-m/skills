@@ -165,6 +165,7 @@ export function mergeLiveBroadcastUpdate(current: youtube_v3.Schema$LiveBroadcas
   ];
   if (contentKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
     resource.contentDetails = {
+      ...current.contentDetails,
       enableAutoStart: patch.enableAutoStart ?? current.contentDetails?.enableAutoStart,
       enableAutoStop: patch.enableAutoStop ?? current.contentDetails?.enableAutoStop,
       enableDvr: patch.enableDvr ?? current.contentDetails?.enableDvr,
@@ -176,6 +177,9 @@ export function mergeLiveBroadcastUpdate(current: youtube_v3.Schema$LiveBroadcas
         broadcastStreamDelayMs: patch.broadcastStreamDelayMs ?? current.contentDetails?.monitorStream?.broadcastStreamDelayMs ?? 0,
       },
     };
+    delete resource.contentDetails.boundStreamId;
+    delete resource.contentDetails.boundStreamLastUpdateTimeMs;
+    if (resource.contentDetails.monitorStream) delete resource.contentDetails.monitorStream.embedHtml;
     parts.push("contentDetails");
   }
   if (parts.length === 0) throw new Error("Live broadcast update requires at least one editable field");
@@ -210,6 +214,7 @@ async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-b
     if (command.streamId) await assertStreamBindingAvailable(service, command.streamId, undefined, command.allowSharedStream);
     const created = await service.createLiveBroadcast(resource);
     if (!created.id) throw new Error("YouTube created a broadcast without returning an ID");
+    console.log(`BROADCAST_CREATED: ${created.id}`);
     try {
       if (command.streamId) await service.bindLiveBroadcast(created.id, command.streamId);
       if (thumbnail) await service.setThumbnail(created.id, thumbnail);

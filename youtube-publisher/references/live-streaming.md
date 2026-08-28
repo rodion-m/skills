@@ -74,8 +74,8 @@ single-encoder recurring workflow, opt in with `--allow-shared-stream`.
 
 Before creation, the CLI reads the most recent completed broadcast and compares latency,
 auto-start/stop, DVR, embedding, recording, monitor-stream, and delay settings with safe
-defaults. Only nonstandard values are inherited, and explicit options win. Dry-run output
-identifies the source broadcast and inherited options. Pass `--no-inherit-previous` to opt out.
+defaults. Only nonstandard values are inherited, and explicit options win. The skill uses
+`--inherit-previous` by default; the raw CLI stays offline unless that flag is supplied.
 
 ## Encoder streams
 
