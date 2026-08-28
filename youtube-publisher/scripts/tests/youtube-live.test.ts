@@ -82,6 +82,9 @@ test("broadcast update preserves untouched fields in each overwritten part", () 
       enableDvr: true,
       enableEmbed: true,
       recordFromStart: true,
+      enableClosedCaptions: true,
+      closedCaptionsType: "closedCaptionsHttpPost",
+      availabilityConfig: { globalConfig: { excludedRegionCodes: ["AQ"] } },
       monitorStream: { enableMonitorStream: true, broadcastStreamDelayMs: 0 },
     },
   };
@@ -94,6 +97,9 @@ test("broadcast update preserves untouched fields in each overwritten part", () 
   assert.equal(update.resource.contentDetails?.enableDvr, true);
   assert.equal(update.resource.contentDetails?.enableAutoStop, true);
   assert.equal(update.resource.contentDetails?.latencyPreference, "normal");
+  assert.equal(update.resource.contentDetails?.enableClosedCaptions, true);
+  assert.equal(update.resource.contentDetails?.closedCaptionsType, "closedCaptionsHttpPost");
+  assert.deepEqual(update.resource.contentDetails?.availabilityConfig?.globalConfig?.excludedRegionCodes, ["AQ"]);
   assert.equal(update.resource.status, undefined);
 });
 
