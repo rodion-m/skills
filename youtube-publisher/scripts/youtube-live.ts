@@ -1,10 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { youtube_v3 } from "googleapis";
-import { BroadcastPatch, LiveCommand, parseLiveCommand } from "./youtube-live-cli";
+import { BroadcastPatch, LatencyPreference, LiveCommand, parseLiveCommand } from "./youtube-live-cli";
 import { YouTubeLiveService, validateThumbnail } from "./youtube-live-service";
 
 type LiveBroadcastSnippetWithCategory = youtube_v3.Schema$LiveBroadcastSnippet & { categoryId?: string | null };
+type LiveBroadcastContentDetailsWithAvailability = youtube_v3.Schema$LiveBroadcastContentDetails & {
+  availabilityConfig?: unknown;
+};
 
 function printJson(value: unknown): void { console.log(JSON.stringify(value, null, 2)); }
 
@@ -81,7 +84,16 @@ async function assertStreamBindingAvailable(
     + "Use a dedicated stream, or pass --allow-shared-stream for a deliberate single-encoder workflow.");
 }
 
-type InheritableBroadcastSettings = Pick<BroadcastPatch, "latencyPreference" | "enableAutoStart" | "enableAutoStop" | "enableDvr" | "enableEmbed" | "recordFromStart" | "enableMonitorStream" | "broadcastStreamDelayMs">;
+type InheritableBroadcastSettings = {
+  latencyPreference?: LatencyPreference;
+  enableAutoStart?: boolean;
+  enableAutoStop?: boolean;
+  enableDvr?: boolean;
+  enableEmbed?: boolean;
+  recordFromStart?: boolean;
+  enableMonitorStream?: boolean;
+  broadcastStreamDelayMs?: number;
+};
 const SAFE_BROADCAST_DEFAULTS: Required<InheritableBroadcastSettings> = { latencyPreference: "normal", enableAutoStart: false, enableAutoStop: false, enableDvr: true, enableEmbed: true, recordFromStart: true, enableMonitorStream: true, broadcastStreamDelayMs: 0 };
 
 export function inheritNonstandardBroadcastSettings(previous: youtube_v3.Schema$LiveBroadcast | undefined, explicitOptions: string[]): { settings: InheritableBroadcastSettings; applied: string[] } {
@@ -161,25 +173,27 @@ export function mergeLiveBroadcastUpdate(current: youtube_v3.Schema$LiveBroadcas
     parts.push("status");
   }
   const contentKeys: Array<keyof BroadcastPatch> = [
-    "enableAutoStart", "enableAutoStop", "enableDvr", "enableEmbed", "recordFromStart", "enableMonitorStream", "broadcastStreamDelayMs", "latencyPreference",
+    "enableAutoStart", "enableAutoStop", "enableDvr", "enableEmbed", "recordFromStart", "enableMonitorStream", "broadcastStreamDelayMs",
   ];
   if (contentKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
-    resource.contentDetails = {
-      ...current.contentDetails,
+    const currentDetails = current.contentDetails as LiveBroadcastContentDetailsWithAvailability | null | undefined;
+    const captionDetails = currentDetails?.closedCaptionsType
+      ? { closedCaptionsType: currentDetails.closedCaptionsType }
+      : { enableClosedCaptions: currentDetails?.enableClosedCaptions };
+    const contentDetails: LiveBroadcastContentDetailsWithAvailability = {
       enableAutoStart: patch.enableAutoStart ?? current.contentDetails?.enableAutoStart,
       enableAutoStop: patch.enableAutoStop ?? current.contentDetails?.enableAutoStop,
       enableDvr: patch.enableDvr ?? current.contentDetails?.enableDvr,
       enableEmbed: patch.enableEmbed ?? current.contentDetails?.enableEmbed,
       recordFromStart: patch.recordFromStart ?? current.contentDetails?.recordFromStart,
-      latencyPreference: patch.latencyPreference ?? current.contentDetails?.latencyPreference,
+      availabilityConfig: currentDetails?.availabilityConfig,
+      ...captionDetails,
       monitorStream: {
         enableMonitorStream: patch.enableMonitorStream ?? current.contentDetails?.monitorStream?.enableMonitorStream ?? true,
         broadcastStreamDelayMs: patch.broadcastStreamDelayMs ?? current.contentDetails?.monitorStream?.broadcastStreamDelayMs ?? 0,
       },
     };
-    delete resource.contentDetails.boundStreamId;
-    delete resource.contentDetails.boundStreamLastUpdateTimeMs;
-    if (resource.contentDetails.monitorStream) delete resource.contentDetails.monitorStream.embedHtml;
+    resource.contentDetails = contentDetails;
     parts.push("contentDetails");
   }
   if (parts.length === 0) throw new Error("Live broadcast update requires at least one editable field");
@@ -187,22 +201,26 @@ export function mergeLiveBroadcastUpdate(current: youtube_v3.Schema$LiveBroadcas
 }
 
 async function createService(): Promise<YouTubeLiveService> { return YouTubeLiveService.create(); }
+export type LiveServiceFactory = () => Promise<YouTubeLiveService>;
 
-async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-broadcast${string}` }>): Promise<void> {
+export async function runBroadcastCommand(
+  command: Extract<LiveCommand, { kind: `live-broadcast${string}` }>,
+  serviceFactory: LiveServiceFactory = createService,
+): Promise<void> {
   if (command.kind === "live-broadcasts-list") {
-    const broadcasts = await (await createService()).listLiveBroadcasts(command.status);
+    const broadcasts = await (await serviceFactory()).listLiveBroadcasts(command.status);
     if (command.json) printJson(broadcasts);
     else console.table(broadcasts.map(summarizeBroadcast));
     return;
   }
   if (command.kind === "live-broadcast-show") {
-    printJson(await (await createService()).getLiveBroadcast(command.broadcastId));
+    printJson(await (await serviceFactory()).getLiveBroadcast(command.broadcastId));
     return;
   }
   if (command.kind === "live-broadcast-create") {
     const description = readDescription(command.description, command.descriptionFile, 5000);
     const thumbnail = command.thumbnail ? validateThumbnail(command.thumbnail) : undefined;
-    const service = command.inheritPrevious || !command.dryRun ? await createService() : undefined;
+    const service = command.inheritPrevious || !command.dryRun ? await serviceFactory() : undefined;
     const previous = command.inheritPrevious && service ? mostRecentCompletedBroadcast(await service.listLiveBroadcasts("completed")) : undefined;
     const inheritance = inheritNonstandardBroadcastSettings(previous, command.explicitOptions);
     const resource = broadcastCreateResource(command, description, inheritance.settings);
@@ -228,7 +246,7 @@ async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-b
   if (command.kind === "live-broadcast-update") {
     const patch = { ...command.patch };
     if (command.descriptionFile) patch.description = readDescription(undefined, command.descriptionFile, 5000);
-    const service = await createService();
+    const service = await serviceFactory();
     const update = mergeLiveBroadcastUpdate(await service.getLiveBroadcast(command.broadcastId), patch);
     if (command.dryRun) {
       printJson({ dryRun: true, operation: command.kind, ...update });
@@ -238,7 +256,7 @@ async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-b
     return;
   }
   if (command.kind === "live-broadcast-bind") {
-    const service = await createService();
+    const service = await serviceFactory();
     if (!command.unbind && command.streamId) {
       await assertStreamBindingAvailable(service, command.streamId, command.broadcastId, command.allowSharedStream);
     }
@@ -257,7 +275,7 @@ async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-b
       printJson({ dryRun: true, operation: command.kind, broadcastId: command.broadcastId, status: command.status });
       return;
     }
-    printJson(await (await createService()).transitionLiveBroadcast(command.broadcastId, command.status));
+    printJson(await (await serviceFactory()).transitionLiveBroadcast(command.broadcastId, command.status));
     return;
   }
   if (!command.confirmed && !command.dryRun) throw new Error("Live broadcast deletion requires --yes");
@@ -265,7 +283,7 @@ async function runBroadcastCommand(command: Extract<LiveCommand, { kind: `live-b
     printJson({ dryRun: true, operation: command.kind, broadcastId: command.broadcastId });
     return;
   }
-  await (await createService()).deleteLiveBroadcast(command.broadcastId);
+  await (await serviceFactory()).deleteLiveBroadcast(command.broadcastId);
   console.log(`Live broadcast deleted: ${command.broadcastId}`);
 }
 

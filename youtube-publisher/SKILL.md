@@ -4,7 +4,7 @@ description: "Upload and fully manage YouTube videos and live events: metadata, 
 version: 1.7.0
 setup_complete: true
 setup: "./SETUP.md"
-changelog: "v1.7.0: full YouTube Live broadcast/stream lifecycle, OAuth CSRF protection, secret-safe output, and explicit destructive-operation guards. Full history: references/CHANGELOG.md."
+changelog: "v1.7.0: full YouTube Live lifecycle with writable-field-safe updates, fail-closed ambiguous upload recovery, non-destructive caption upsert, OAuth CSRF protection, secret-safe output, explicit destructive-operation guards, regression tests, and CI. Full history: references/CHANGELOG.md."
 ---
 
 ## 🔴 Strict Execution Rule (Highest Priority)
@@ -39,6 +39,14 @@ event. Scheduled timestamps must include an explicit timezone (`Z` or `±HH:MM`)
 
 The skill passes `--inherit-previous` before creation unless the user requests a clean
 profile. The raw CLI remains deterministic and offline without that explicit flag.
+
+An interrupted video insert is never retried inside `youtube-upload.ts`. Recovery must
+identify exactly one recent same-title video with a verified non-zero duration. Persistent
+`P0D` exits `42` with `PERSISTENT_P0D_VIDEO_ID`; unavailable or inconclusive inspection
+exits `43` with `AMBIGUOUS_UPLOAD_VIDEO_ID`. Inspect the channel before another insert.
+
+Caption recovery updates one exact language/name track in place or inserts a new track.
+It never deletes an existing caption before the replacement upload succeeds.
 
 ## Metadata sanitization
 

@@ -20,7 +20,6 @@ export interface BroadcastPatch {
   recordFromStart?: boolean;
   enableMonitorStream?: boolean;
   broadcastStreamDelayMs?: number;
-  latencyPreference?: LatencyPreference;
 }
 export type LiveCommand =
   | { kind: "live-broadcasts-list"; status: BroadcastFilter; json: boolean }
@@ -202,7 +201,7 @@ export function parseLiveCommand(args: string[]): LiveCommand {
       flags.assertOnly([
         "--broadcast-id", "--title", "--description", "--description-file", "--category", "--scheduled-start",
         "--scheduled-end", "--privacy", "--auto-start", "--auto-stop", "--dvr", "--embeddable",
-        "--record-from-start", "--monitor-stream", "--delay-ms", "--latency", "--dry-run",
+        "--record-from-start", "--monitor-stream", "--delay-ms", "--dry-run",
       ]);
       if (flags.has("--description") && flags.has("--description-file")) throw new Error("Use either --description or --description-file, not both");
       const patch: BroadcastPatch = {};
@@ -221,7 +220,6 @@ export function parseLiveCommand(args: string[]): LiveCommand {
         if (value !== undefined) (patch as Record<string, unknown>)[property] = bool(value, option);
       }
       if (flags.optional("--delay-ms") !== undefined) patch.broadcastStreamDelayMs = integer(flags.optional("--delay-ms"), "--delay-ms");
-      if (flags.optional("--latency") !== undefined) patch.latencyPreference = choice<LatencyPreference>(flags.optional("--latency"), "--latency", ["normal", "low", "ultraLow"]);
       const descriptionFile = flags.optional("--description-file");
       if (Object.keys(patch).length === 0 && !descriptionFile) throw new Error("Live broadcast update requires at least one editable field");
       return { kind, broadcastId: flags.required("--broadcast-id"), patch, descriptionFile, dryRun: flags.has("--dry-run") };

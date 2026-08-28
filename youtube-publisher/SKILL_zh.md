@@ -11,6 +11,9 @@
 普通输出会自动隐藏推流密钥。完整命令和安全规则见 [references/live-streaming.md](references/live-streaming.md)。
 默认情况下，每个独立节目或活动使用单独命名的编码器推流；如需在多个活动间有意复用，必须传入 `--allow-shared-stream`。
 
+视频上传响应中断后，`youtube-upload.ts` 内部不得再次盲目 insert。持续 `P0D` 使用退出码 42 和 `PERSISTENT_P0D_VIDEO_ID`；服务端检查为空、异常或无法确认时使用退出码 43 和 `AMBIGUOUS_UPLOAD_VIDEO_ID`，必须先核对频道再重传。
+字幕恢复对同语言/名称轨道执行原位更新，不得先删除现有字幕。
+
 ## 元数据清洗规则
 
 - 标题/详情里的 `>` 会自动改写成 `》`

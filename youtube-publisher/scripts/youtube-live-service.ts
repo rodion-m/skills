@@ -21,6 +21,10 @@ export class YouTubeLiveService {
     return new YouTubeLiveService(youtube);
   }
 
+  static fromClient(youtube: youtube_v3.Youtube): YouTubeLiveService {
+    return new YouTubeLiveService(youtube);
+  }
+
   async setThumbnail(videoId: string, filePath: string): Promise<void> {
     const thumbnail = validateThumbnail(filePath);
     await this.youtube.thumbnails.set({ videoId, media: { body: fs.createReadStream(thumbnail) } });

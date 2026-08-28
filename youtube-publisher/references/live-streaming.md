@@ -60,7 +60,10 @@ Editable broadcast settings include title, description, category, scheduled star
 privacy, auto-start/stop, DVR, embedding, recording, monitor stream, and delay. Creation
 also supports made-for-kids and latency preference. Updating a broadcast preserves every
 untouched mutable field in each submitted API part because `liveBroadcasts.update`
-otherwise clears omitted fields.
+otherwise clears omitted fields. The update request is built from an explicit writable
+allowlist rather than spreading a GET response; read-only binding/embed fields and
+unsupported latency updates are never submitted. Closed captions use exactly one of the
+legacy boolean or replacement type fields, never both.
 
 The CLI refuses to transition to `testing` or `live` unless the broadcast is bound and the
 stream reports `active`. Transitions to `live` or `complete` require `--yes`. Do not use a

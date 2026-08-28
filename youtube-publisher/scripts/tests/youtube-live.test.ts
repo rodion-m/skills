@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseLiveCommand } from "../youtube-live-cli";
-import { findStreamBindingConflicts, inheritNonstandardBroadcastSettings, mergeLiveBroadcastUpdate, redactStreamKey } from "../youtube-live";
+import { findStreamBindingConflicts, inheritNonstandardBroadcastSettings, mergeLiveBroadcastUpdate, redactStreamKey, runBroadcastCommand } from "../youtube-live";
+import { YouTubeLiveService } from "../youtube-live-service";
 
 test("broadcast creation defaults to private and emits safe production defaults", () => {
   const future = new Date(Date.now() + 86_400_000).toISOString();
@@ -85,22 +86,35 @@ test("broadcast update preserves untouched fields in each overwritten part", () 
       enableClosedCaptions: true,
       closedCaptionsType: "closedCaptionsHttpPost",
       availabilityConfig: { globalConfig: { excludedRegionCodes: ["AQ"] } },
-      monitorStream: { enableMonitorStream: true, broadcastStreamDelayMs: 0 },
+      boundStreamId: "read-only-stream",
+      boundStreamLastUpdateTimeMs: "2030-01-01T09:00:00Z",
+      projection: "360",
+      monitorStream: { enableMonitorStream: true, broadcastStreamDelayMs: 0, embedHtml: "read-only" },
     },
   };
 
-  const update = mergeLiveBroadcastUpdate(current, { title: "New title", enableAutoStop: true, latencyPreference: "normal" });
+  const update = mergeLiveBroadcastUpdate(current, { title: "New title", enableAutoStop: true });
+  const updatedDetails = update.resource.contentDetails as typeof current.contentDetails;
 
   assert.deepEqual(update.parts, ["snippet", "contentDetails"]);
   assert.equal(update.resource.snippet?.description, "Keep description");
   assert.equal(update.resource.snippet?.scheduledStartTime, "2030-01-01T10:00:00Z");
-  assert.equal(update.resource.contentDetails?.enableDvr, true);
-  assert.equal(update.resource.contentDetails?.enableAutoStop, true);
-  assert.equal(update.resource.contentDetails?.latencyPreference, "normal");
-  assert.equal(update.resource.contentDetails?.enableClosedCaptions, true);
-  assert.equal(update.resource.contentDetails?.closedCaptionsType, "closedCaptionsHttpPost");
-  assert.deepEqual(update.resource.contentDetails?.availabilityConfig?.globalConfig?.excludedRegionCodes, ["AQ"]);
+  assert.equal(updatedDetails?.enableDvr, true);
+  assert.equal(updatedDetails?.enableAutoStop, true);
+  assert.equal(updatedDetails?.enableClosedCaptions, undefined);
+  assert.equal(updatedDetails?.closedCaptionsType, "closedCaptionsHttpPost");
+  assert.deepEqual(updatedDetails?.availabilityConfig?.globalConfig?.excludedRegionCodes, ["AQ"]);
+  assert.equal(updatedDetails?.boundStreamId, undefined);
+  assert.equal(updatedDetails?.projection, undefined);
+  assert.equal(updatedDetails?.monitorStream?.embedHtml, undefined);
   assert.equal(update.resource.status, undefined);
+});
+
+test("broadcast update rejects unsupported latency mutation", () => {
+  assert.throws(
+    () => parseLiveCommand(["live-broadcast-update", "--broadcast-id", "abc", "--latency", "low"]),
+    /unknown option/i,
+  );
 });
 
 test("destructive commands parse confirmation separately from dry-run", () => {
@@ -135,4 +149,30 @@ test("previous broadcast inheritance applies only nonstandard non-explicit setti
   const result = inheritNonstandardBroadcastSettings(previous, ["--auto-start"]);
   assert.deepEqual(result.settings, { latencyPreference: "low", enableMonitorStream: false });
   assert.deepEqual(result.applied, ["--latency", "--monitor-stream"]);
+});
+
+test("broadcast creation emits its ID before post-create setup failure", async () => {
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+  const command = parseLiveCommand([
+    "live-broadcast-create", "--title", "Recovery test", "--scheduled-start", future,
+    "--stream-id", "stream-1",
+  ]);
+  if (command.kind !== "live-broadcast-create") throw new Error("unexpected command");
+  const service = {
+    listLiveBroadcasts: async () => [],
+    createLiveBroadcast: async () => ({ id: "broadcast-123" }),
+    bindLiveBroadcast: async () => { throw new Error("bind failed"); },
+  } as unknown as YouTubeLiveService;
+  const messages: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => { messages.push(args.join(" ")); };
+  try {
+    await assert.rejects(
+      () => runBroadcastCommand(command, async () => service),
+      /Broadcast broadcast-123 was created.*bind failed/,
+    );
+  } finally {
+    console.log = originalLog;
+  }
+  assert.ok(messages.includes("BROADCAST_CREATED: broadcast-123"));
 });
